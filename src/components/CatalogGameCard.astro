@@ -1,0 +1,102 @@
+---
+/**
+ * Catalog card for a Steam dataset record.
+ *
+ * Header art comes from the dataset's `header_image`. The typeset placeholder
+ * is rendered unconditionally behind the image and revealed by CSS when the
+ * dataset had no artwork (`game.headerImage === null`) or when the image fails
+ * to load at runtime (`data-cover-image` error handler in catalog.astro).
+ *
+ * Class names live in `src/styles/global.css` so the server-rendered first page
+ * and the client-rendered result pages stay visually identical.
+ */
+
+import JournalIcon from './ui/JournalIcon.astro';
+
+import type { CatalogGameSummary } from '../data/catalog/types';
+
+interface Props {
+  game: CatalogGameSummary;
+}
+
+const { game } = Astro.props;
+
+const year = game.releaseYear ?? 'Year N/A';
+const primaryGenre = game.genres[0] ?? 'Unclassified';
+// Show the second genre plus the strongest browsable tag (e.g. "Horror"),
+// which Steam's coarse genre list often cannot express.
+const secondary = [...game.genres.slice(1, 2), ...game.tags.slice(0, 1)];
+const totalReviews =
+  game.positiveReviews === null ? null : game.positiveReviews + (game.negativeReviews ?? 0);
+---
+
+<article class="catalog-card" data-catalog-card data-app-id={game.appId}>
+  <a href={`/catalog/${game.appId}`} class="catalog-card__link">
+    <div class="catalog-card__art">
+      <!-- Hidden while artwork exists: it is an overlay layer, so leaving it
+           visible would paint over a successfully loaded image. -->
+      <div class="catalog-card__fallback" hidden={!!game.headerImage}>
+        <span class="catalog-card__fallback-top">Steam Archive / No Artwork</span>
+        <strong class="catalog-card__fallback-title">{game.name}</strong>
+        <span class="catalog-card__fallback-foot">App {game.appId}</span>
+      </div>
+
+      {
+        game.headerImage ? (
+          <img
+            src={game.headerImage}
+            alt={`Steam header artwork for ${game.name}`}
+            loading="lazy"
+            decoding="async"
+            referrerpolicy="no-referrer"
+            data-cover-image
+          />
+        ) : null
+      }
+
+      <span class="catalog-card__appid">App {game.appId}</span>
+    </div>
+
+    <div class="catalog-card__body">
+      <h3 class="catalog-card__title">{game.name}</h3>
+
+      <p class="catalog-card__meta">
+        {year}<span class="catalog-card__meta-sep">/</span>{primaryGenre}
+      </p>
+
+      <div class="catalog-card__tags">
+        {
+          secondary.map((label) => (
+            <span class="catalog-card__tag">{label}</span>
+          ))
+        }
+
+        {
+          game.metacriticScore !== null ? (
+            <span
+              class="catalog-card__score"
+              title="Metacritic score, as recorded in the local Steam dataset snapshot"
+            >
+              MC {game.metacriticScore}
+            </span>
+          ) : (
+            <span class="catalog-card__no-score">No score</span>
+          )
+        }
+      </div>
+    </div>
+  </a>
+
+  <div class="catalog-card__footer">
+    <span>
+      {totalReviews !== null
+        ? `${totalReviews.toLocaleString('en-US')} reviews`
+        : 'Reviews N/A'}
+    </span>
+
+    <a href={`/catalog/${game.appId}`} aria-label={`Open archive record for ${game.name}`}>
+      Record
+      <JournalIcon name="arrow" size={11} />
+    </a>
+  </div>
+</article>

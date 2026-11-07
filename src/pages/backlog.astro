@@ -1,0 +1,563 @@
+---
+import { getCollection } from 'astro:content';
+
+import NotebookLayout from '../layouts/NotebookLayout.astro';
+import ArchiveCover from '../components/ArchiveCover.astro';
+import MemoryCardFilter from '../components/ui/MemoryCardFilter.astro';
+import JournalIcon from '../components/ui/JournalIcon.astro';
+
+import { backlogGames } from '../data/backlog';
+
+import {
+  journalsForGame,
+  journalPath,
+} from '../lib/journal';
+
+const allLogs = await getCollection('journal');
+
+const games = [...backlogGames].sort(
+  (a, b) => a.registry - b.registry
+);
+
+const totalSlots = Math.max(
+  16,
+  Math.ceil(games.length / 16) * 16
+);
+
+const emptySlots = Array.from(
+  { length: totalSlots - games.length },
+  (_, index) => games.length + index + 1
+);
+
+const nextCount = games.filter(
+  (game) => game.status === 'Next'
+).length;
+
+const franchises = [
+  'ALL',
+  'Silent Hill',
+  'Resident Evil',
+  'Indie Horror',
+];
+
+const formatNumber = (value: number) =>
+  String(value).padStart(2, '0');
+---
+
+<NotebookLayout activeTab="backlog">
+
+  <div data-backlog-root class="space-y-8">
+
+    <!-- HEADER -->
+    <section class="flex flex-col justify-between gap-6 border-b border-dashed border-[#cfc7b8] pb-7 lg:flex-row lg:items-end">
+
+      <div>
+        <p class="font-mono text-[9px] uppercase tracking-[0.18em] text-paper-muted">
+          PERSONAL ARCHIVE / VOLUME 01
+        </p>
+
+        <h2 class="mt-2 font-serif text-4xl font-bold text-neutral-950 md:text-5xl">
+          The Backlog Index
+        </h2>
+
+        <p class="mt-3 max-w-2xl font-serif text-base leading-relaxed text-neutral-700">
+          Katalog dunia yang belum dijelajahi, perjalanan yang
+          sudah tercatat, dan cerita yang masih menunggu giliran.
+        </p>
+      </div>
+
+      <div class="grid shrink-0 grid-cols-2 border border-[#cfc5b3] bg-[#f0eade]">
+
+        <div class="px-7 py-4 text-center">
+          <div class="font-mono text-2xl font-bold text-neutral-900">
+            {formatNumber(games.length)}
+          </div>
+          <div class="font-mono text-[9px] uppercase text-paper-muted">
+            Registered
+          </div>
+        </div>
+
+        <div class="border-l border-[#cfc5b3] px-7 py-4 text-center">
+          <div class="font-mono text-2xl font-bold text-red-800">
+            {formatNumber(nextCount)}
+          </div>
+          <div class="font-mono text-[9px] uppercase text-paper-muted">
+            Next
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- FILTER -->
+    <section class="space-y-5">
+
+      <div class="flex items-center gap-2 border-b border-[#d8d0c0] pb-2">
+        <JournalIcon name="archive" size={14} />
+
+        <h3 class="font-mono text-[11px] font-bold uppercase tracking-wider text-neutral-900">
+          Archive Controls
+        </h3>
+      </div>
+
+      <div class="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
+
+        <div class="space-y-2">
+          <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+            Select Platform / Memory Card
+          </p>
+
+          <MemoryCardFilter />
+        </div>
+
+        <div class="w-full max-w-sm">
+          <label
+            for="backlog-search"
+            class="mb-2 block font-mono text-[9px] uppercase tracking-wider text-paper-muted"
+          >
+            Search Archive
+          </label>
+
+          <input
+            id="backlog-search"
+            data-backlog-search
+            type="search"
+            placeholder="Cari judul, genre, atau catatan..."
+            autocomplete="off"
+            class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-3 font-mono text-[11px] text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-red-800"
+          />
+        </div>
+      </div>
+
+      <!-- FRANCHISE FILTER -->
+      <div class="flex flex-wrap items-center gap-2">
+
+        <span class="mr-2 font-mono text-[9px] uppercase text-paper-muted">
+          Series
+        </span>
+
+        {
+          franchises.map((franchise) => (
+            <button
+              type="button"
+              data-franchise-filter={franchise}
+              aria-pressed={franchise === 'ALL' ? 'true' : 'false'}
+              class="franchise-filter border border-[#c4b9a5] bg-[#f1ebde] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-neutral-700 transition-colors hover:bg-[#dfd6c6]"
+            >
+              {franchise === 'ALL'
+                ? 'ALL SERIES'
+                : franchise}
+            </button>
+          ))
+        }
+
+      </div>
+    </section>
+
+    <!-- REGISTRY -->
+    <section class="space-y-4">
+
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b-2 border-[#bdb4a5] pb-3">
+
+        <div class="flex items-center gap-2">
+          <JournalIcon name="backlog" size={16} />
+
+          <h3 class="font-mono text-xs font-bold uppercase tracking-wider text-neutral-900">
+            Game Registry
+          </h3>
+        </div>
+
+        <span
+          data-backlog-count
+          aria-live="polite"
+          class="font-mono text-[10px] text-paper-muted"
+        >
+          {games.length} / {games.length} Entries
+        </span>
+      </div>
+
+      <div
+        data-backlog-grid
+        class="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-4"
+      >
+
+        {
+          games.map((game) => {
+            const related = journalsForGame(
+              allLogs,
+              game.id
+            );
+
+            return (
+              <article
+                id={`game-${game.id}`}
+                data-backlog-card
+                data-platform={game.platform.toUpperCase()}
+                data-franchise={game.franchise}
+                data-search={`${game.title} ${game.genre} ${game.reason} ${game.franchise}`.toLowerCase()}
+                class="scroll-mt-26 flex min-h-[240px] min-w-0 flex-col border border-[#c9c0b0] bg-[#f3ede2] p-4 transition-all hover:border-[#8b7660] hover:shadow-lg"
+              >
+
+                <div class="mb-3 flex items-center justify-between border-b border-dashed border-[#d6cdbb] pb-2">
+
+                  <span class="font-mono text-[9px] uppercase text-paper-muted">
+                    Registry Entry
+                  </span>
+
+                  <strong class="font-mono text-lg text-[#8b8070]">
+                    {formatNumber(game.registry)}
+                  </strong>
+
+                </div>
+
+                <div class="flex flex-1 gap-3">
+
+                  <ArchiveCover
+                    title={game.title}
+                    cover={game.cover}
+                    platform={game.platform}
+                    class="w-24 shrink-0 rotate-[-1deg] border-4 border-white shadow-md"
+                  />
+
+                  <div class="flex min-w-0 flex-1 flex-col">
+
+                    <p class="font-mono text-[9px] uppercase tracking-wide text-paper-muted">
+                      {game.platform} / {game.year}
+                    </p>
+
+                    <h4 class="mt-1 font-serif text-xl font-bold leading-tight text-neutral-950">
+                      {game.title}
+                    </h4>
+
+                    <p class="mt-1 font-mono text-[8px] uppercase text-paper-muted">
+                      {game.franchise}
+                    </p>
+
+                    <p class="mt-2 line-clamp-3 font-serif text-sm leading-relaxed text-neutral-600">
+                      {game.reason}
+                    </p>
+
+                    <div class="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3">
+
+                      <span
+                        class:list={[
+                          'border px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-wider',
+                          game.status === 'Next'
+                            ? 'border-red-800 bg-red-900/10 text-red-900'
+                            : 'border-[#b9ae9c] text-neutral-600',
+                        ]}
+                      >
+                        {game.status}
+                      </span>
+
+                      <span class="font-mono text-[9px] uppercase text-paper-muted">
+                        {game.priority}
+                      </span>
+
+                    </div>
+
+                  </div>
+                </div>
+
+                <!-- LINKED JOURNALS -->
+                <div class="mt-3 border-t border-[#d6cdbb] pt-3">
+
+                  {
+                    related.length > 0 ? (
+                      <div class="space-y-2">
+
+                        {related.map((entry) => (
+                          <a
+                            href={journalPath(entry)}
+                            class="flex items-center gap-2 font-mono text-[9px] font-bold uppercase text-amber-900 hover:underline"
+                          >
+                            <JournalIcon name="logs" size={12} />
+
+                            {entry.data.entryType === 'session'
+                              ? 'Baca Field Log'
+                              : 'Baca Catatan Kurasi'}
+
+                            <JournalIcon name="arrow" size={11} />
+                          </a>
+                        ))}
+
+                      </div>
+                    ) : (
+                      <span class="font-mono text-[9px] uppercase text-paper-muted">
+                        Belum ada catatan
+                      </span>
+                    )
+                  }
+
+                  <div class="mt-2.5 border-t border-dashed border-[#d6cdbb] pt-2">
+                    <a
+                      href={`/games/${game.id}`}
+                      class="inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-wider text-amber-900 hover:underline"
+                    >
+                      Buka Game Profile
+                      <JournalIcon name="arrow" size={12} />
+                    </a>
+                  </div>
+
+                </div>
+              </article>
+            );
+          })
+        }
+
+        <!-- EMPTY SLOTS -->
+        {
+          emptySlots.map((slot) => (
+            <div
+              data-blank-slot
+              class="hidden min-h-[240px] flex-col items-center justify-center border border-dashed border-[#d2c9b9] bg-[#f8f5ee]/60 p-5 text-center md:flex"
+            >
+              <span class="font-mono text-2xl font-bold text-[#c6bdae]">
+                {formatNumber(slot)}
+              </span>
+
+              <div class="mt-3 h-px w-12 bg-[#d9d1c4]"></div>
+
+              <span class="mt-3 font-mono text-[9px] uppercase tracking-widest text-[#a69c8d]">
+                Empty Slot
+              </span>
+            </div>
+          ))
+        }
+
+      </div>
+
+      <div
+        data-backlog-no-results
+        class="hidden border border-dashed border-[#c5b7a1] bg-[#f6f0e4] px-6 py-10 text-center"
+        role="status"
+      >
+        <p class="font-mono text-xs font-bold uppercase text-neutral-800">
+          No Matching Records
+        </p>
+
+        <p class="mt-2 font-serif text-base text-neutral-600">
+          Belum ada game yang cocok dengan filter ini.
+        </p>
+      </div>
+    </section>
+
+    <!-- NOTES -->
+    <section class="border-t border-dashed border-[#cfc7b8] pt-8">
+
+      <div class="max-w-3xl border border-[#cfc4af] bg-[#f4eee1] p-5">
+
+        <h3 class="flex items-center gap-2 font-mono text-[10px] font-bold uppercase text-neutral-900">
+          <JournalIcon name="note" size={13} />
+          Archive Notes
+        </h3>
+
+        <p class="mt-3 font-serif text-base leading-relaxed text-neutral-700">
+          Field Log adalah pengalaman bermain pribadi yang sudah ditulis.
+          Catatan Kurasi merupakan pengantar untuk eksplorasi berikutnya.
+          Nomor registry tidak berubah ketika game difilter.
+        </p>
+
+      </div>
+    </section>
+
+  </div>
+
+</NotebookLayout>
+
+<style>
+  .franchise-filter[aria-pressed="true"] {
+    background: #3d342d;
+    color: #fff8ec;
+    border-color: #8e3029;
+  }
+</style>
+
+<script>
+  function initializeBacklog() {
+    const root = document.querySelector<HTMLElement>(
+      '[data-backlog-root]'
+    );
+
+    if (!root || root.dataset.ready === 'true') return;
+
+    root.dataset.ready = 'true';
+
+    const cards = Array.from(
+      root.querySelectorAll<HTMLElement>(
+        '[data-backlog-card]'
+      )
+    );
+
+    const blankSlots = Array.from(
+      root.querySelectorAll<HTMLElement>(
+        '[data-blank-slot]'
+      )
+    );
+
+    const platformButtons = Array.from(
+      root.querySelectorAll<HTMLButtonElement>(
+        '[data-platform-filter]'
+      )
+    );
+
+    const franchiseButtons = Array.from(
+      root.querySelectorAll<HTMLButtonElement>(
+        '[data-franchise-filter]'
+      )
+    );
+
+    const search = root.querySelector<HTMLInputElement>(
+      '[data-backlog-search]'
+    );
+
+    const counter = root.querySelector<HTMLElement>(
+      '[data-backlog-count]'
+    );
+
+    const noResults = root.querySelector<HTMLElement>(
+      '[data-backlog-no-results]'
+    );
+
+    let platform = 'ALL';
+
+    const allowedFranchises = [
+      'Silent Hill',
+      'Resident Evil',
+      'Indie Horror',
+    ];
+
+    const initialFranchise = new URLSearchParams(
+      window.location.search
+    ).get('franchise');
+
+    let franchise =
+      initialFranchise &&
+      allowedFranchises.includes(initialFranchise)
+        ? initialFranchise
+        : 'ALL';
+
+    function render() {
+      const keyword = (
+        search?.value ?? ''
+      ).trim().toLowerCase();
+
+      let visibleCount = 0;
+
+      cards.forEach((card) => {
+        const matchesPlatform =
+          platform === 'ALL' ||
+          card.dataset.platform === platform;
+
+        const matchesFranchise =
+          franchise === 'ALL' ||
+          card.dataset.franchise === franchise;
+
+        const matchesKeyword =
+          !keyword ||
+          (card.dataset.search ?? '').includes(keyword);
+
+        const visible =
+          matchesPlatform &&
+          matchesFranchise &&
+          matchesKeyword;
+
+        card.classList.toggle('hidden', !visible);
+
+        if (visible) visibleCount++;
+      });
+
+      const defaultView =
+        platform === 'ALL' &&
+        franchise === 'ALL' &&
+        keyword === '';
+
+      blankSlots.forEach((slot) => {
+        slot.style.display = defaultView ? '' : 'none';
+      });
+
+      if (counter) {
+        counter.textContent =
+          `${visibleCount} / ${cards.length} Entries`;
+      }
+
+      noResults?.classList.toggle(
+        'hidden',
+        visibleCount !== 0
+      );
+
+      platformButtons.forEach((button) => {
+        button.setAttribute(
+          'aria-pressed',
+          String(
+            button.dataset.platformFilter === platform
+          )
+        );
+      });
+
+      franchiseButtons.forEach((button) => {
+        button.setAttribute(
+          'aria-pressed',
+          String(
+            button.dataset.franchiseFilter === franchise
+          )
+        );
+      });
+    }
+
+    platformButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        platform = button.dataset.platformFilter ?? 'ALL';
+        render();
+      });
+    });
+
+    franchiseButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        franchise =
+          button.dataset.franchiseFilter ?? 'ALL';
+
+        const url = new URL(window.location.href);
+
+        if (franchise === 'ALL') {
+          url.searchParams.delete('franchise');
+        } else {
+          url.searchParams.set('franchise', franchise);
+        }
+
+        history.replaceState(
+          history.state,
+          '',
+          `${url.pathname}${url.search}${url.hash}`
+        );
+
+        render();
+      });
+    });
+
+    search?.addEventListener('input', render);
+
+    render();
+
+    // Pastikan tautan #game-id tetap bekerja
+    // setelah halaman dirender lewat ClientRouter.
+    const hash = window.location.hash.slice(1);
+
+    if (hash) {
+      requestAnimationFrame(() => {
+        document.getElementById(
+          decodeURIComponent(hash)
+        )?.scrollIntoView({
+          block: 'start',
+        });
+      });
+    }
+  }
+
+  document.addEventListener(
+    'astro:page-load',
+    initializeBacklog
+  );
+
+  initializeBacklog();
+</script>

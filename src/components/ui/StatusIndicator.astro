@@ -1,0 +1,90 @@
+---
+import JournalIcon from './JournalIcon.astro';
+
+interface Props {
+  label?: string;
+  sublabel?: string;
+  active?: boolean;
+}
+
+const {
+  label = 'Session Active',
+  sublabel = 'Archive Status // Writable',
+  active = true,
+} = Astro.props;
+---
+
+<div class="journal-status">
+  <div class="journal-status__main">
+    <span
+      class:list={[
+        'journal-status__signal',
+        active && 'journal-status__signal--active',
+      ]}
+    ></span>
+
+    <JournalIcon
+      name="status"
+      size={12}
+    />
+
+    <span>{label}</span>
+  </div>
+
+  <div class="journal-status__sub">
+    {sublabel}
+  </div>
+</div>
+
+<style>
+  .journal-status {
+    padding: 0.5rem 0.7rem;
+
+    border: 1px solid #b8b09f;
+
+    background: #f1ebde;
+  }
+
+  .journal-status__main {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+
+    font-family: var(--font-mono);
+    font-size: 0.61rem;
+
+    color: #49453d;
+
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .journal-status__signal {
+    width: 6px;
+    height: 6px;
+
+    border-radius: 999px;
+
+    background: #8c8c8c;
+  }
+
+  .journal-status__signal--active {
+    background: #15803d;
+
+    box-shadow:
+      0 0 7px rgb(21 128 61 / 45%);
+  }
+
+  .journal-status__sub {
+    margin-top: 0.25rem;
+    margin-left: 1.25rem;
+
+    font-family: var(--font-mono);
+    font-size: 0.48rem;
+
+    color: #989184;
+
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+</style>

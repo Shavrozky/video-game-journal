@@ -1,0 +1,89 @@
+---
+import JournalIcon from './JournalIcon.astro';
+
+interface Props {
+  title: string;
+  meta?: string;
+  icon?: 'play' | 'note' | 'archive' | 'pin';
+}
+
+const {
+  title,
+  meta,
+  icon = 'play',
+} = Astro.props;
+---
+
+<div class="section-label">
+  <div class="section-label__title">
+    <JournalIcon
+      name={icon}
+      size={11}
+    />
+
+    <span>{title}</span>
+  </div>
+
+  <div class="section-label__line"></div>
+
+  {
+    meta && (
+      <span class="section-label__meta">
+        {meta}
+      </span>
+    )
+  }
+</div>
+
+<style>
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+
+    padding-bottom: 0.5rem;
+
+    border-bottom: 1px solid #ded7c8;
+  }
+
+  .section-label__title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    flex-shrink: 0;
+
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+
+    color: #292724;
+
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .section-label__line {
+    height: 1px;
+    flex: 1;
+
+    background:
+      repeating-linear-gradient(
+        90deg,
+        #d8d0c0 0 4px,
+        transparent 4px 8px
+      );
+  }
+
+  .section-label__meta {
+    flex-shrink: 0;
+
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+
+    color: var(--color-paper-muted);
+
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+</style>

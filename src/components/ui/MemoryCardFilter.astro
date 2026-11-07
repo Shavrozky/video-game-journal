@@ -1,0 +1,145 @@
+---
+// src/components/ui/MemoryCardFilter.astro
+
+const platforms = [
+  { value: 'ALL', label: 'ALL' },
+  { value: 'PC', label: 'PC' },
+  { value: 'PS1', label: 'PS1' },
+  { value: 'PS2', label: 'PS2' },
+  { value: 'PS3', label: 'PS3' },
+  { value: 'PS4', label: 'PS4' },
+  { value: 'PS5', label: 'PS5' },
+  { value: 'SWITCH', label: 'SWITCH' },
+];
+---
+
+<div
+  class="memory-filter-list"
+  role="group"
+  aria-label="Filter berdasarkan platform game"
+  data-platform-filters
+>
+  {
+    platforms.map((platform) => (
+      <button
+        type="button"
+        class="memory-filter"
+        data-platform-filter={platform.value}
+        aria-pressed={platform.value === 'ALL' ? 'true' : 'false'}
+      >
+        <svg
+          width="19"
+          height="19"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M5 2h11l4 4v16H4V4Z" />
+          <path d="M6 2v7h11V3" />
+          <path d="M9 4v3h5V4" />
+          <path d="M7 14h10v5H7Z" />
+        </svg>
+
+        <span class="memory-filter__label">
+          {platform.label}
+        </span>
+
+        <span class="memory-filter__contacts" aria-hidden="true">
+          <i></i><i></i><i></i>
+        </span>
+      </button>
+    ))
+  }
+</div>
+
+<style>
+  .memory-filter-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .memory-filter {
+    position: relative;
+
+    display: flex;
+    min-width: 75px;
+    min-height: 64px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+
+    padding: 0.45rem 0.75rem 0.6rem;
+
+    border: 1px solid #bdb3a1;
+    border-radius: 4px 4px 2px 2px;
+
+    background: #eae4d8;
+    color: #625c52;
+
+    box-shadow:
+      inset 1px 1px 0 rgb(255 255 255 / 65%),
+      2px 3px 0 rgb(74 65 51 / 11%);
+
+    cursor: pointer;
+
+    transition:
+      transform 160ms ease,
+      background 160ms ease,
+      color 160ms ease,
+      border-color 160ms ease;
+  }
+
+  .memory-filter__label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+
+  .memory-filter__contacts {
+    position: absolute;
+    bottom: 2px;
+
+    display: flex;
+    gap: 3px;
+  }
+
+  .memory-filter__contacts i {
+    width: 7px;
+    height: 2px;
+    background: #b59b6c;
+  }
+
+  .memory-filter:hover {
+    transform: translateY(-3px);
+    border-color: #777063;
+    color: #292724;
+  }
+
+  .memory-filter[aria-pressed="true"] {
+    border-color: #862c25;
+    background: #39312b;
+    color: #fbf7ef;
+
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 8%),
+      0 3px 0 #862c25;
+  }
+
+  .memory-filter:focus-visible {
+    outline: 2px solid #862c25;
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .memory-filter {
+      transition: none;
+    }
+  }
+</style>

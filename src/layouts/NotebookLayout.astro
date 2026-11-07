@@ -1,0 +1,479 @@
+---
+// src/layouts/NotebookLayout.astro
+
+import '../styles/global.css';
+
+import { ClientRouter } from 'astro:transitions';
+
+import NavTab from '../components/ui/NavTab.astro';
+import StatusIndicator from '../components/ui/StatusIndicator.astro';
+import JournalIcon from '../components/ui/JournalIcon.astro';
+
+interface Props {
+  activeTab?: 'logs' | 'backlog' | 'catalog' | 'favorites';
+  /** Optional overrides so non-journal pages can reuse this exact chrome. */
+  title?: string;
+  subtitle?: string;
+  kicker?: string;
+  kickerSuffix?: string;
+  pageLabel?: string;
+  footerLabel?: string;
+  sideIndexLabel?: string;
+  headTitle?: string;
+}
+
+const {
+  activeTab = 'logs',
+  title = 'VIDEO GAME FIELD JOURNAL',
+  subtitle =
+    'Catatan perjalanan bermain, observasi atmosfer, pengalaman personal, dan hal-hal aneh yang tersisa setelah layar dimatikan.',
+  kicker = 'Personal Archive',
+  kickerSuffix = 'Vol. 01 / Field Notes',
+  pageLabel = 'Page 001',
+  footerLabel = "Traveler's Log // Personal Dispatch 001",
+  sideIndexLabel = 'LOG // 2026',
+  headTitle = 'Video Game Field Journal',
+} = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+
+    <meta
+      name="description"
+      content="Video Game Field Journal — catatan personal perjalanan bermain, observasi atmosfer, dan pengalaman interaktif."
+    />
+
+    <title>{headTitle}</title>
+
+    <ClientRouter />
+  </head>
+
+  <body
+    class="min-h-screen
+           overflow-x-hidden
+           bg-[#0f1113]
+           text-paper-ink"
+  >
+
+    <!-- ===================================== -->
+    <!-- FIXED NAVIGATION -->
+    <!-- ===================================== -->
+
+    <header
+      class="fixed
+             inset-x-0 top-0
+             z-50
+             border-b border-[#2f2b25]
+             bg-[#0f1113]/95
+             backdrop-blur-md"
+    >
+      <div
+        class="flex
+               h-[72px]
+               w-full
+               items-end
+               justify-between
+               px-4
+               md:px-8"
+      >
+
+        <!-- ARCHIVE IDENTITY -->
+
+        <div
+          class="hidden
+                 h-full
+                 items-center
+                 gap-3
+                 md:flex"
+        >
+          <div
+            class="flex
+                   h-8 w-8
+                   items-center
+                   justify-center
+                   border border-[#3b3833]
+                   bg-[#17191d]
+                   text-[#8f302d]"
+          >
+            <JournalIcon
+              name="archive"
+              size={14}
+              strokeWidth={1.6}
+            />
+          </div>
+
+          <div
+            class="flex
+                   items-center
+                   gap-3
+                   font-mono
+                   text-[9px]
+                   font-medium
+                   uppercase
+                   tracking-[0.18em]
+                   text-neutral-500"
+          >
+            <span>
+              Personal Game Archive
+            </span>
+
+            <span
+              class="h-4
+                     w-px
+                     bg-neutral-800"
+            ></span>
+
+            <span
+              class="text-neutral-600"
+            >
+              Vol. 01
+            </span>
+          </div>
+        </div>
+
+
+        <!-- NAVIGATION TABS -->
+
+        <nav
+          class="ml-auto
+                 flex
+                 h-full
+                 items-end
+                 gap-2"
+          aria-label="Navigasi jurnal"
+        >
+          <NavTab
+            href="/"
+            label="Field Logs"
+            icon="logs"
+            active={activeTab === 'logs'}
+          />
+
+          <NavTab
+            href="/backlog"
+            label="Backlog Shelf"
+            icon="backlog"
+            active={activeTab === 'backlog'}
+          />
+
+          <NavTab
+            href="/catalog"
+            label="Game Catalog"
+            icon="catalog"
+            active={activeTab === 'catalog'}
+          />
+        </nav>
+
+      </div>
+    </header>
+
+
+    <!-- ===================================== -->
+    <!-- FULL JOURNAL -->
+    <!-- ===================================== -->
+
+    <div class="pt-[72px]">
+
+      <div
+        class="min-h-[calc(100vh-72px)]
+               w-full"
+      >
+
+        <div
+          class="grid
+                 min-h-[calc(100vh-72px)]
+                 grid-cols-[34px_minmax(0,1fr)]
+                 md:grid-cols-[42px_minmax(0,1fr)]"
+        >
+
+          <!-- ===================================== -->
+          <!-- NOTEBOOK SPINE -->
+          <!-- ===================================== -->
+
+          <aside
+            class="journal-spine
+                   border-y-2
+                   border-r
+                   border-[#3d3830]"
+            aria-hidden="true"
+          ></aside>
+
+
+          <!-- ===================================== -->
+          <!-- PAPER -->
+          <!-- ===================================== -->
+
+          <div
+            class="notebook-grid
+                   relative
+                   flex
+                   min-h-[calc(100vh-72px)]
+                   min-w-0
+                   flex-col
+                   border-y-2
+                   border-[#3d3830]
+                   bg-paper-light
+                   px-5 py-6
+                   sm:px-8
+                   lg:px-10
+                   xl:px-12"
+          >
+
+            <!-- ===================================== -->
+            <!-- SIDE INDEX -->
+            <!-- ===================================== -->
+
+            <div
+              class="absolute
+                     right-0 top-24
+                     hidden
+                     h-28 w-5
+                     translate-x-full
+                     items-center
+                     justify-center
+                     rounded-r-sm
+                     border border-l-0
+                     border-[#8b6d3a]
+                     bg-[#c29d62]
+                     shadow-md
+                     xl:flex"
+              aria-hidden="true"
+            >
+              <span
+                class="-rotate-90
+                       whitespace-nowrap
+                       font-mono
+                       text-[8px]
+                       font-bold
+                       uppercase
+                       tracking-[0.18em]
+                       text-[#3f2d12]"
+              >
+                {sideIndexLabel}
+              </span>
+            </div>
+
+
+            <!-- ===================================== -->
+            <!-- JOURNAL HEADER -->
+            <!-- ===================================== -->
+
+            <header
+              class="mb-8
+                     border-b-2
+                     border-dashed
+                     border-[#cfc7b8]
+                     pb-6"
+            >
+
+              <div
+                class="flex
+                       flex-col
+                       gap-5
+                       lg:flex-row
+                       lg:items-end
+                       lg:justify-between"
+              >
+
+                <!-- TITLE AREA -->
+
+                <div class="min-w-0">
+
+                  <div
+                    class="mb-2
+                           flex
+                           flex-wrap
+                           items-center
+                           gap-2"
+                  >
+
+                    <div
+                      class="flex
+                             items-center
+                             gap-2
+                             bg-[#3f392f]
+                             px-2 py-1
+                             font-mono
+                             text-[9px]
+                             font-bold
+                             uppercase
+                             tracking-[0.16em]
+                             text-[#fbf9f4]"
+                    >
+                      <JournalIcon
+                        name="archive"
+                        size={10}
+                        strokeWidth={1.7}
+                      />
+
+                      <span>
+                        {kicker}
+                      </span>
+                    </div>
+
+                    <span
+                      class="font-mono
+                             text-[9px]
+                             font-bold
+                             uppercase
+                             tracking-[0.16em]
+                             text-paper-muted"
+                    >
+                      {kickerSuffix}
+                    </span>
+
+                  </div>
+
+
+                  <h1
+                    class="font-mono
+                           text-3xl
+                           font-bold
+                           tracking-[-0.05em]
+                           text-neutral-950
+                           md:text-4xl"
+                  >
+                    {title}
+                  </h1>
+
+
+                  <p
+                    class="mt-2
+                           max-w-3xl
+                           font-mono
+                           text-[11px]
+                           leading-relaxed
+                           text-paper-muted"
+                  >
+                    {subtitle}
+                  </p>
+
+                </div>
+
+
+                <!-- SYSTEM STATUS -->
+
+                <div class="shrink-0">
+                  <StatusIndicator
+                    label="Session Active"
+                    sublabel="Archive Status // Writable"
+                    active={true}
+                  />
+                </div>
+
+              </div>
+
+            </header>
+
+
+            <!-- ===================================== -->
+            <!-- PAGE CONTENT -->
+            <!-- ===================================== -->
+
+            <main
+              class="min-w-0 flex-1"
+            >
+              <slot />
+            </main>
+
+
+            <!-- ===================================== -->
+            <!-- JOURNAL FOOTER -->
+            <!-- ===================================== -->
+
+            <footer
+              class="mt-12
+                     flex
+                     flex-col
+                     gap-3
+                     border-t
+                     border-dashed
+                     border-[#cfc7b8]
+                     pt-4
+                     sm:flex-row
+                     sm:items-center
+                     sm:justify-between"
+            >
+
+              <!-- ARCHIVE FOOTER -->
+
+              <div
+                class="flex
+                       items-center
+                       gap-2
+                       font-mono
+                       text-[9px]
+                       uppercase
+                       tracking-wider
+                       text-paper-muted"
+              >
+                <JournalIcon
+                  name="archive"
+                  size={11}
+                  strokeWidth={1.6}
+                />
+
+                <span>
+                  {footerLabel}
+                </span>
+              </div>
+
+
+              <!-- PAGE META -->
+
+              <div
+                class="flex
+                       items-center
+                       gap-4
+                       font-mono
+                       text-[9px]
+                       uppercase
+                       tracking-wider
+                       text-paper-muted"
+              >
+
+                <span
+                  class="flex
+                         items-center
+                         gap-1.5"
+                >
+                  <JournalIcon
+                    name="bookmark"
+                    size={10}
+                    strokeWidth={1.6}
+                  />
+
+                  Archive Vol. 01
+                </span>
+
+
+                <span
+                  class="h-3
+                         w-px
+                         bg-[#cfc7b8]"
+                ></span>
+
+
+                <span>
+                  {pageLabel}
+                </span>
+
+              </div>
+
+            </footer>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </body>
+</html>

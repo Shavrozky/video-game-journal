@@ -1,0 +1,835 @@
+---
+/**
+ * PC GAME DATABASE — local Steam dataset catalog.
+ *
+ * Rendered on demand by the Node adapter (`prerender = false`) because the
+ * result set depends on query parameters. The first page is rendered on the
+ * server from the same query engine the API uses, so the page is useful
+ * without JavaScript; the script below then takes over for search, filters,
+ * sorting and pagination without full page reloads.
+ *
+ * Data source: local snapshot of github.com/torpadeka/steam-games-dataset.
+ * No RAWG / IGDB / SteamSpy / CheapShark requests are involved.
+ */
+
+import NotebookLayout from '../layouts/NotebookLayout.astro';
+import CatalogGameCard from '../components/CatalogGameCard.astro';
+import JournalIcon from '../components/ui/JournalIcon.astro';
+
+import { getCatalog } from '../lib/catalog/store';
+import { parseCatalogQuery, queryCatalog } from '../lib/catalog/query';
+import { DEFAULT_SORT, MAX_PAGE_SIZE, SORT_OPTIONS } from '../data/catalog/types';
+
+export const prerender = false;
+
+const catalog = await getCatalog();
+
+const { query } = parseCatalogQuery(Astro.url.searchParams);
+const initial = queryCatalog(catalog, query);
+
+const totalGames = catalog.meta?.counts.imported ?? catalog.index.length;
+const datasetReady = catalog.status === 'ready';
+
+const generatedLabel = catalog.meta?.generatedAt
+  ? new Date(catalog.meta.generatedAt).toISOString().slice(0, 10)
+  : 'not imported';
+
+const formatNumber = (value: number) => value.toLocaleString('en-US');
+const pad = (value: number) => String(value).padStart(2, '0');
+
+const rangeStart = initial.total === 0 ? 0 : (initial.page - 1) * initial.pageSize + 1;
+const rangeEnd = Math.min(initial.page * initial.pageSize, initial.total);
+---
+
+<NotebookLayout
+  activeTab="catalog"
+  headTitle="PC Game Database — Video Game Field Journal"
+  kicker="Reference Archive"
+  kickerSuffix="Vol. 02 / Steam Dataset"
+  title="PC GAME DATABASE"
+  subtitle="An Archive of Digital Worlds. A local snapshot of the Steam catalogue — browsable without keys, logins, or third-party APIs."
+  footerLabel="Catalog Index // Local Steam Snapshot"
+  pageLabel="Index / A–Z"
+  sideIndexLabel="CATALOG // PC"
+>
+  <div data-catalog-root class="space-y-8">
+    <!-- HEADER -->
+    <section class="flex flex-col justify-between gap-6 border-b border-dashed border-[#cfc7b8] pb-7 lg:flex-row lg:items-end">
+      <div>
+        <p class="font-mono text-[9px] uppercase tracking-[0.18em] text-paper-muted">
+          STEAM DATASET / REFERENCE INDEX
+        </p>
+
+        <h2 class="mt-2 font-serif text-4xl font-bold text-neutral-950 md:text-5xl">
+          The Catalog Register
+        </h2>
+
+        <p class="mt-3 max-w-2xl font-serif text-base leading-relaxed text-neutral-700">
+          Katalog global game PC dari snapshot dataset Steam. Ini adalah
+          arsip referensi, bukan Backlog Shelf pribadi dan bukan catatan
+          sesi bermain.
+        </p>
+      </div>
+
+      <div class="grid shrink-0 grid-cols-3 border border-[#cfc5b3] bg-[#f0eade]">
+        <div class="px-6 py-4 text-center">
+          <div class="font-mono text-2xl font-bold text-neutral-900" data-catalog-total>
+            {datasetReady ? formatNumber(totalGames) : '—'}
+          </div>
+          <div class="font-mono text-[9px] uppercase text-paper-muted">PC Games</div>
+        </div>
+
+        <div class="border-l border-[#cfc5b3] px-6 py-4 text-center">
+          <div class="font-mono text-2xl font-bold text-neutral-900">
+            {pad(catalog.genres.length)}
+          </div>
+          <div class="font-mono text-[9px] uppercase text-paper-muted">Genres</div>
+        </div>
+
+        <div class="border-l border-[#cfc5b3] px-6 py-4 text-center">
+          <div class="font-mono text-xl font-bold text-red-800">
+            {catalog.meta?.releaseYearRange.min ?? '—'}–{catalog.meta?.releaseYearRange.max ?? '—'}
+          </div>
+          <div class="font-mono text-[9px] uppercase text-paper-muted">Coverage</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DATASET MISSING -->
+    {
+      !datasetReady && (
+        <section class="border-2 border-[#8e3029] bg-[#f6e9e5] p-6" role="alert">
+          <h3 class="flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-wider text-[#8e3029]">
+            <JournalIcon name="status" size={14} />
+            Local dataset not imported
+          </h3>
+
+          <p class="mt-3 font-serif text-base leading-relaxed text-neutral-800">
+            The catalog needs the normalized local snapshot before it can
+            serve records. Run the importer, then reload this page:
+          </p>
+
+          <pre class="mt-3 overflow-x-auto border border-[#d8c9c2] bg-[#fbf7f4] p-3 font-mono text-[11px] text-neutral-800">npm run catalog:import</pre>
+
+          <p class="mt-3 font-mono text-[10px] leading-relaxed text-paper-muted">
+            {catalog.error}
+          </p>
+        </section>
+      )
+    }
+
+    <!-- CONTROLS -->
+    <section class="space-y-5" aria-labelledby="catalog-controls-heading">
+      <div class="flex items-center gap-2 border-b border-[#d8d0c0] pb-2">
+        <JournalIcon name="catalog" size={14} />
+
+        <h3
+          id="catalog-controls-heading"
+          class="font-mono text-[11px] font-bold uppercase tracking-wider text-neutral-900"
+        >
+          Archive Controls
+        </h3>
+
+        <span class="ml-auto font-mono text-[9px] uppercase text-paper-muted">
+          Snapshot {generatedLabel}
+        </span>
+      </div>
+
+      <form
+        data-catalog-form
+        class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))]"
+        role="search"
+        method="get"
+        action="/catalog"
+      >
+        <div>
+          <label
+            for="catalog-search"
+            class="mb-2 block font-mono text-[9px] uppercase tracking-wider text-paper-muted"
+          >
+            Search Title
+          </label>
+
+          <div class="relative">
+            <input
+              id="catalog-search"
+              name="search"
+              data-catalog-search
+              type="search"
+              value={query.search}
+              placeholder="Resident Evil, Portal, SIGNALIS…"
+              autocomplete="off"
+              spellcheck="false"
+              class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-3 font-mono text-[11px] text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-red-800"
+            />
+
+            <span
+              data-catalog-spinner
+              class="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 font-mono text-[9px] uppercase tracking-wider text-red-800"
+            >
+              …
+            </span>
+          </div>
+        </div>
+
+        <div>
+          <label
+            for="catalog-genre"
+            class="mb-2 block font-mono text-[9px] uppercase tracking-wider text-paper-muted"
+          >
+            Genre
+          </label>
+
+          <select
+            id="catalog-genre"
+            name="genre"
+            data-catalog-genre
+            class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-3 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+          >
+            <option value="">All genres</option>
+            {
+              catalog.genres.map((genre) => (
+                <option value={genre.name} selected={query.genre === genre.name}>
+                  {genre.name} ({genre.count})
+                </option>
+              ))
+            }
+          </select>
+        </div>
+
+        <div>
+          <label
+            for="catalog-year"
+            class="mb-2 block font-mono text-[9px] uppercase tracking-wider text-paper-muted"
+          >
+            Release Year
+          </label>
+
+          <select
+            id="catalog-year"
+            name="year"
+            data-catalog-year
+            class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-3 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+          >
+            <option value="">All years</option>
+            {
+              catalog.years.map((year) => (
+                <option value={year} selected={query.year === year}>
+                  {year}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+
+        <div>
+          <label
+            for="catalog-tag"
+            class="mb-2 block font-mono text-[9px] uppercase tracking-wider text-paper-muted"
+          >
+            Tag
+          </label>
+
+          <select
+            id="catalog-tag"
+            name="tag"
+            data-catalog-tag
+            class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-3 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+          >
+            <option value="">All tags</option>
+            {
+              catalog.tags.slice(0, 60).map((tag) => (
+                <option value={tag.name} selected={query.tag === tag.name}>
+                  {tag.name} ({tag.count})
+                </option>
+              ))
+            }
+          </select>
+        </div>
+
+        <div>
+          <label
+            for="catalog-sort"
+            class="mb-2 block font-mono text-[9px] uppercase tracking-wider text-paper-muted"
+          >
+            Sort Order
+          </label>
+
+          <select
+            id="catalog-sort"
+            name="sort"
+            data-catalog-sort
+            class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-3 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+          >
+            {
+              SORT_OPTIONS.map((option) => (
+                <option value={option.value} selected={query.sort === option.value}>
+                  {option.label}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+
+        <noscript>
+          <div class="md:col-span-2 xl:col-span-5">
+            <button
+              type="submit"
+              class="border border-[#8e3029] bg-[#39312b] px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#fbf7ef]"
+            >
+              Apply Filters
+            </button>
+          </div>
+        </noscript>
+      </form>
+
+      <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+        {DEFAULT_SORT === query.sort ? 'Default order: title A–Z' : `Order: ${query.sort}`}
+        <span class="mx-2 text-[#c4b9a5]">|</span>
+        Max {MAX_PAGE_SIZE} records per page
+        <span class="mx-2 text-[#c4b9a5]">|</span>
+        Genre is Steam's store genre; Tag is the community tag dimension
+      </p>
+    </section>
+
+    <!-- RESULTS -->
+    <section class="space-y-4" aria-labelledby="catalog-results-heading">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b-2 border-[#bdb4a5] pb-3">
+        <div class="flex items-center gap-2">
+          <JournalIcon name="archive" size={16} />
+
+          <h3
+            id="catalog-results-heading"
+            class="font-mono text-xs font-bold uppercase tracking-wider text-neutral-900"
+          >
+            Catalog Entries
+          </h3>
+        </div>
+
+        <span
+          data-catalog-count
+          aria-live="polite"
+          data-range-start={rangeStart}
+          data-range-end={rangeEnd}
+          class="font-mono text-[10px] text-paper-muted"
+        >
+          {rangeStart}–{rangeEnd} / {formatNumber(initial.total)} entries
+        </span>
+      </div>
+
+      <!-- LOADING -->
+      <div
+        data-catalog-loading
+        class="hidden border border-dashed border-[#c5b7a1] bg-[#f6f0e4] px-6 py-8 text-center"
+        role="status"
+      >
+        <p class="font-mono text-[11px] font-bold uppercase tracking-wider text-neutral-800">
+          Querying local archive…
+        </p>
+      </div>
+
+      <!-- ERROR -->
+      <div
+        data-catalog-error
+        class="hidden border-2 border-[#8e3029] bg-[#f6e9e5] px-6 py-8 text-center"
+        role="alert"
+      >
+        <p class="font-mono text-[11px] font-bold uppercase tracking-wider text-[#8e3029]">
+          Archive unavailable
+        </p>
+
+        <p class="mt-2 font-serif text-base text-neutral-700" data-catalog-error-detail>
+          The local catalog API could not be reached.
+        </p>
+
+        <button
+          type="button"
+          data-catalog-retry
+          class="mt-4 border border-[#8e3029] px-4 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#8e3029] hover:bg-[#8e3029] hover:text-[#fbf7ef]"
+        >
+          Retry
+        </button>
+      </div>
+
+      <div
+        data-catalog-grid
+        class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        data-page-size={initial.pageSize}
+        aria-live="polite"
+      >
+        {initial.results.map((game) => <CatalogGameCard game={game} />)}
+      </div>
+
+      <!-- NO RESULTS -->
+      <div
+        data-catalog-empty
+        class:list={[
+          'border border-dashed border-[#c5b7a1] bg-[#f6f0e4] px-6 py-10 text-center',
+          initial.total !== 0 && 'hidden',
+        ]}
+        role="status"
+      >
+        <p class="font-mono text-xs font-bold uppercase text-neutral-800">No Matching Records</p>
+
+        <p class="mt-2 font-serif text-base text-neutral-600">
+          Tidak ada game di dataset yang cocok dengan pencarian dan filter ini.
+        </p>
+
+        <button
+          type="button"
+          data-catalog-reset
+          class="mt-4 border border-[#8b7660] px-4 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-neutral-700 hover:bg-[#39312b] hover:text-[#fbf7ef]"
+        >
+          Reset Filters
+        </button>
+      </div>
+
+      <!-- PAGINATION -->
+      <nav
+        data-catalog-pagination
+        class="flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-[#cfc7b8] pt-4"
+        aria-label="Catalog pagination"
+        hidden={initial.totalPages <= 1}
+      >
+        <a
+          data-catalog-prev
+          href={initial.page > 1 ? `/catalog?${new URLSearchParams({ ...Object.fromEntries(Astro.url.searchParams), page: String(initial.page - 1) })}` : '#'}
+          class="inline-flex items-center gap-2 border border-[#c4b9a5] bg-[#f1ebde] px-4 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-neutral-700 hover:bg-[#dfd6c6] aria-disabled:pointer-events-none aria-disabled:opacity-40"
+          aria-disabled={initial.page <= 1 ? 'true' : 'false'}
+          rel="prev"
+        >
+          <JournalIcon name="arrow" size={12} class="rotate-180" />
+          Previous
+        </a>
+
+        <span class="font-mono text-[10px] uppercase tracking-wider text-paper-muted" data-catalog-page>
+          Page {initial.page} / {Math.max(initial.totalPages, 1)}
+        </span>
+
+        <a
+          data-catalog-next
+          href={initial.page < initial.totalPages ? `/catalog?${new URLSearchParams({ ...Object.fromEntries(Astro.url.searchParams), page: String(initial.page + 1) })}` : '#'}
+          class="inline-flex items-center gap-2 border border-[#c4b9a5] bg-[#f1ebde] px-4 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-neutral-700 hover:bg-[#dfd6c6] aria-disabled:pointer-events-none aria-disabled:opacity-40"
+          aria-disabled={initial.page >= initial.totalPages ? 'true' : 'false'}
+          rel="next"
+        >
+          Next
+          <JournalIcon name="arrow" size={12} />
+        </a>
+      </nav>
+    </section>
+
+    <!-- ATTRIBUTION -->
+    <section class="border-t border-dashed border-[#cfc7b8] pt-8">
+      <div class="max-w-3xl border border-[#cfc4af] bg-[#f4eee1] p-5">
+        <h3 class="flex items-center gap-2 font-mono text-[10px] font-bold uppercase text-neutral-900">
+          <JournalIcon name="note" size={13} />
+          Dataset Attribution
+        </h3>
+
+        <p class="mt-3 font-serif text-base leading-relaxed text-neutral-700">
+          Records come from a local snapshot of the
+          {' '}
+          <a
+            href={catalog.meta?.sourceRepository ?? 'https://github.com/torpadeka/steam-games-dataset'}
+            class="text-amber-900 underline"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            torpadeka/steam-games-dataset
+          </a>
+          {' '}
+          project (games_sample10.json, December 2025 scrape).
+        </p>
+
+        <p class="mt-3 font-mono text-[9px] leading-relaxed uppercase tracking-wider text-paper-muted">
+          Licensing caveat: the upstream scraper code is MIT licensed, but the
+          game metadata belongs to the respective publishers and Valve. The
+          upstream README states the dataset is intended for research purposes
+          only. It is not unrestricted MIT-licensed content.
+        </p>
+
+        <p class="mt-3 font-mono text-[9px] leading-relaxed uppercase tracking-wider text-paper-muted">
+          This register is a reference archive. It is deliberately separate from
+          the personal Backlog Shelf and the Field Logs.
+        </p>
+      </div>
+    </section>
+  </div>
+</NotebookLayout>
+
+<script>
+  /**
+   * Catalog interactions.
+   *
+   * - One fetch per settled user intent (input debounced, selects immediate).
+   * - A monotonically increasing request token discards stale responses, so a
+   *   slow "resi" can never overwrite a newer "resident evil" result set.
+   * - Listeners are bound to the freshly rendered root element and an
+   *   AbortController is stored per root, so navigating away with the
+   *   ClientRouter cannot leave a duplicate handler attached to window.
+   */
+
+  type Summary = {
+    appId: number;
+    name: string;
+    releaseDate: string | null;
+    releaseYear: number | null;
+    headerImage: string | null;
+    genres: string[];
+    tags: string[];
+    metacriticScore: number | null;
+    positiveReviews: number | null;
+    negativeReviews: number | null;
+    steamUrl: string;
+  };
+
+  type ApiResponse = {
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+    results: Summary[];
+    error?: string;
+    issues?: Array<{ parameter: string; message: string }>;
+  };
+
+  const DEBOUNCE_MS = 250;
+
+  function el<K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    className?: string,
+    text?: string
+  ): HTMLElementTagNameMap[K] {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function iconArrow(size = 11): SVGSVGElement {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', String(size));
+    svg.setAttribute('height', String(size));
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.8');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    line.setAttribute('d', 'M5 12h14');
+    const head = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    head.setAttribute('d', 'm14 7 5 5-5 5');
+
+    svg.append(line, head);
+    return svg;
+  }
+
+  /** Mirrors CatalogGameCard.astro; class names come from global.css. */
+  function buildCard(game: Summary): HTMLElement {
+    const card = el('article', 'catalog-card');
+    card.dataset.catalogCard = '';
+    card.dataset.appId = String(game.appId);
+
+    const link = el('a', 'catalog-card__link');
+    link.href = `/catalog/${game.appId}`;
+
+    const art = el('div', 'catalog-card__art');
+
+    const fallback = el('div', 'catalog-card__fallback');
+    fallback.append(
+      el('span', 'catalog-card__fallback-top', 'Steam Archive / No Artwork'),
+      el('strong', 'catalog-card__fallback-title', game.name),
+      el('span', 'catalog-card__fallback-foot', `App ${game.appId}`)
+    );
+    // Overlay layer: hidden unless the record has no artwork or it fails.
+    fallback.hidden = !!game.headerImage;
+
+    art.append(fallback);
+
+    if (game.headerImage) {
+      const img = el('img');
+      img.src = game.headerImage;
+      img.alt = `Steam header artwork for ${game.name}`;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.dataset.coverImage = '';
+      art.append(img);
+    }
+
+    art.append(el('span', 'catalog-card__appid', `App ${game.appId}`));
+
+    const body = el('div', 'catalog-card__body');
+    body.append(el('h3', 'catalog-card__title', game.name));
+
+    const meta = el('p', 'catalog-card__meta');
+    meta.append(
+      document.createTextNode(game.releaseYear ? String(game.releaseYear) : 'Year N/A'),
+      el('span', 'catalog-card__meta-sep', '/'),
+      document.createTextNode(game.genres[0] ?? 'Unclassified')
+    );
+
+    const tags = el('div', 'catalog-card__tags');
+    for (const label of [...game.genres.slice(1, 2), ...game.tags.slice(0, 1)]) {
+      tags.append(el('span', 'catalog-card__tag', label));
+    }
+
+    if (game.metacriticScore !== null) {
+      const score = el('span', 'catalog-card__score', `MC ${game.metacriticScore}`);
+      score.title = 'Metacritic score, as recorded in the local Steam dataset snapshot';
+      tags.append(score);
+    } else {
+      tags.append(el('span', 'catalog-card__no-score', 'No score'));
+    }
+
+    body.append(meta, tags);
+    link.append(art, body);
+
+    const footer = el('div', 'catalog-card__footer');
+    const reviews =
+      game.positiveReviews === null
+        ? 'Reviews N/A'
+        : `${(game.positiveReviews + (game.negativeReviews ?? 0)).toLocaleString('en-US')} reviews`;
+
+    const record = el('a');
+    record.href = `/catalog/${game.appId}`;
+    record.setAttribute('aria-label', `Open archive record for ${game.name}`);
+    record.append(document.createTextNode('Record'), iconArrow());
+
+    footer.append(el('span', undefined, reviews), record);
+    card.append(link, footer);
+
+    return card;
+  }
+
+  function initialiseCatalog() {
+    const root = document.querySelector<HTMLElement>('[data-catalog-root]');
+    if (!root || root.dataset.wired === 'true') return;
+    root.dataset.wired = 'true';
+
+    const form = root.querySelector<HTMLFormElement>('[data-catalog-form]');
+    const search = root.querySelector<HTMLInputElement>('[data-catalog-search]');
+    const genre = root.querySelector<HTMLSelectElement>('[data-catalog-genre]');
+    const tag = root.querySelector<HTMLSelectElement>('[data-catalog-tag]');
+    const year = root.querySelector<HTMLSelectElement>('[data-catalog-year]');
+    const sort = root.querySelector<HTMLSelectElement>('[data-catalog-sort]');
+    const grid = root.querySelector<HTMLElement>('[data-catalog-grid]');
+    const count = root.querySelector<HTMLElement>('[data-catalog-count]');
+    const pageLabel = root.querySelector<HTMLElement>('[data-catalog-page]');
+    const pagination = root.querySelector<HTMLElement>('[data-catalog-pagination]');
+    const prev = root.querySelector<HTMLAnchorElement>('[data-catalog-prev]');
+    const next = root.querySelector<HTMLAnchorElement>('[data-catalog-next]');
+    const loading = root.querySelector<HTMLElement>('[data-catalog-loading]');
+    const errorBox = root.querySelector<HTMLElement>('[data-catalog-error]');
+    const errorDetail = root.querySelector<HTMLElement>('[data-catalog-error-detail]');
+    const empty = root.querySelector<HTMLElement>('[data-catalog-empty]');
+    const spinner = root.querySelector<HTMLElement>('[data-catalog-spinner]');
+    const retry = root.querySelector<HTMLButtonElement>('[data-catalog-retry]');
+    const reset = root.querySelector<HTMLButtonElement>('[data-catalog-reset]');
+
+    if (!grid) return;
+
+    let currentPage = Number(
+      new URLSearchParams(window.location.search).get('page') ?? '1'
+    );
+    let debounceTimer: number | undefined;
+    let controller: AbortController | null = null;
+    let token = 0;
+
+    // Taken from the server render, never inferred from the number of cards:
+    // a filtered first page can legitimately contain fewer results.
+    const pageSize = Number(grid.dataset.pageSize ?? '') || 24;
+
+    function buildParams(page: number): URLSearchParams {
+      const params = new URLSearchParams();
+      const keyword = search?.value.trim() ?? '';
+
+      if (keyword) params.set('search', keyword);
+      if (genre?.value) params.set('genre', genre.value);
+      if (tag?.value) params.set('tag', tag.value);
+      if (year?.value) params.set('year', year.value);
+      if (sort?.value) params.set('sort', sort.value);
+      params.set('page_size', String(pageSize));
+      params.set('page', String(page));
+      return params;
+    }
+
+    function syncUrl(params: URLSearchParams) {
+      const url = new URL(window.location.href);
+      url.search = params.toString();
+      history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+
+    function setBusy(busy: boolean) {
+      spinner?.classList.toggle('hidden', !busy);
+      loading?.classList.toggle('hidden', !busy);
+      grid?.classList.toggle('opacity-50', busy);
+    }
+
+    function showError(message: string) {
+      errorBox?.classList.remove('hidden');
+      if (errorDetail) errorDetail.textContent = message;
+    }
+
+    function hideError() {
+      errorBox?.classList.add('hidden');
+    }
+
+    function renderResults(data: ApiResponse, params: URLSearchParams) {
+      const results = Array.isArray(data.results) ? data.results : [];
+
+      grid?.replaceChildren(...results.map(buildCard));
+
+      const rangeStart = data.total === 0 ? 0 : (data.page - 1) * data.pageSize + 1;
+      const rangeEnd = Math.min(data.page * data.pageSize, data.total);
+
+      if (count) {
+        count.textContent = `${rangeStart}–${rangeEnd} / ${data.total.toLocaleString('en-US')} entries`;
+      }
+
+      if (pageLabel) pageLabel.textContent = `Page ${data.page} / ${Math.max(data.totalPages, 1)}`;
+
+      empty?.classList.toggle('hidden', data.total !== 0);
+      pagination?.toggleAttribute('hidden', data.totalPages <= 1);
+
+      if (prev) {
+        const disabled = data.page <= 1;
+        prev.setAttribute('aria-disabled', String(disabled));
+        const prevParams = new URLSearchParams(params);
+        prevParams.set('page', String(Math.max(1, data.page - 1)));
+        prev.href = disabled ? '#' : `/catalog?${prevParams.toString()}`;
+      }
+
+      if (next) {
+        const disabled = data.page >= data.totalPages;
+        next.setAttribute('aria-disabled', String(disabled));
+        const nextParams = new URLSearchParams(params);
+        nextParams.set('page', String(data.page + 1));
+        next.href = disabled ? '#' : `/catalog?${nextParams.toString()}`;
+      }
+
+      currentPage = data.page;
+    }
+
+    async function load(page: number, options: { push?: boolean } = {}) {
+      const params = buildParams(page);
+      token += 1;
+      const requestToken = token;
+
+      controller?.abort();
+      controller = new AbortController();
+
+      setBusy(true);
+      hideError();
+
+      try {
+        const response = await fetch(`/api/games?${params.toString()}`, {
+          signal: controller.signal,
+          headers: { accept: 'application/json' },
+        });
+
+        const data = (await response.json()) as ApiResponse;
+
+        // A newer request already started — drop this response.
+        if (requestToken !== token) return;
+
+        if (!response.ok) {
+          showError(data.error ?? `The catalog API returned HTTP ${response.status}.`);
+          return;
+        }
+
+        renderResults(data, params);
+
+        if (options.push !== false) syncUrl(params);
+      } catch (error) {
+        if ((error as Error)?.name === 'AbortError') return;
+        if (requestToken !== token) return;
+
+        showError(
+          'The local catalog API could not be reached. Reload the page, or make sure the catalog data was imported.'
+        );
+      } finally {
+        if (requestToken === token) setBusy(false);
+      }
+    }
+
+    // Filters apply immediately; the text field waits for a typing pause.
+    genre?.addEventListener('change', () => load(1));
+    tag?.addEventListener('change', () => load(1));
+    year?.addEventListener('change', () => load(1));
+    sort?.addEventListener('change', () => load(1));
+
+    search?.addEventListener('input', () => {
+      window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => load(1), DEBOUNCE_MS);
+    });
+
+    form?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      load(1);
+    });
+
+    prev?.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (prev.getAttribute('aria-disabled') === 'true') return;
+      load(Math.max(1, currentPage - 1));
+    });
+
+    next?.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (next.getAttribute('aria-disabled') === 'true') return;
+      load(currentPage + 1);
+    });
+
+    retry?.addEventListener('click', () => load(currentPage, { push: false }));
+
+    reset?.addEventListener('click', () => {
+      if (search) search.value = '';
+      if (genre) genre.value = '';
+      if (tag) tag.value = '';
+      if (year) year.value = '';
+      load(1);
+    });
+
+    // Missing artwork -> reveal the typeset placeholder.
+    grid.addEventListener(
+      'error',
+      (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLImageElement)) return;
+        if (!target.matches('[data-cover-image]')) return;
+
+        target.remove();
+        const fallback = target.parentElement?.querySelector('.catalog-card__fallback');
+        fallback?.removeAttribute('hidden');
+      },
+      true
+    );
+
+    // Browser back/forward within the history entries we create.
+    window.addEventListener('popstate', () => {
+      const params = new URLSearchParams(window.location.search);
+      const page = Number(params.get('page') ?? '1');
+      if (search) search.value = params.get('search') ?? '';
+      if (genre) genre.value = params.get('genre') ?? '';
+      if (tag) tag.value = params.get('tag') ?? '';
+      if (year) year.value = params.get('year') ?? '';
+      if (sort) sort.value = params.get('sort') ?? 'name_asc';
+      load(Number.isFinite(page) && page > 0 ? page : 1, { push: false });
+    });
+
+    // Deep-linked query strings are already rendered by the server; only a
+    // page number beyond the server render needs a client refresh.
+    const initialPage = Number(new URLSearchParams(window.location.search).get('page') ?? '1');
+    if (Number.isFinite(initialPage) && initialPage > 1) {
+      load(initialPage, { push: false });
+    }
+  }
+
+  document.addEventListener('astro:page-load', initialiseCatalog);
+  initialiseCatalog();
+</script>

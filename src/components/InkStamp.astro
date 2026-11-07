@@ -1,0 +1,119 @@
+---
+// src/components/InkStamp.astro
+
+interface Props {
+  status: string;
+  size?: 'sm' | 'md' | 'lg';
+  tone?: 'red' | 'black';
+  rotation?: number;
+}
+
+const {
+  status,
+  size = 'md',
+  tone = 'red',
+  rotation,
+} = Astro.props;
+
+const normalizedStatus = status.toUpperCase();
+
+const seed = [...normalizedStatus].reduce(
+  (total, character) => total + character.charCodeAt(0),
+  0
+);
+
+// Rotasi deterministik agar tidak berubah setiap render.
+// Rentang: -3 sampai +4 derajat.
+const stampRotation = rotation ?? ((seed % 8) - 3);
+
+const color = tone === 'black' ? '#292620' : '#991b1b';
+---
+
+<span
+  class:list={[
+    'ink-stamp',
+    `ink-stamp--${size}`,
+  ]}
+  style={`--stamp-color:${color}; --stamp-rotation:${stampRotation}deg;`}
+  aria-label={`Status: ${normalizedStatus}`}
+>
+  {normalizedStatus}
+</span>
+
+<style>
+  .ink-stamp {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+
+    border: 2px solid currentColor;
+    border-radius: 2px;
+
+    color: var(--stamp-color);
+
+    font-family: var(--font-mono);
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-transform: uppercase;
+
+    transform: rotate(var(--stamp-rotation));
+
+    opacity: 0.85;
+    isolation: isolate;
+
+    box-shadow:
+      inset 0 0 0 1px rgba(255,255,255,0.15),
+      1px 2px 0 rgba(0,0,0,0.06);
+  }
+
+  /* Tekstur tinta kasar */
+  .ink-stamp::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+
+    background-image:
+      repeating-linear-gradient(
+        15deg,
+        transparent 0px,
+        transparent 3px,
+        rgba(255,255,255,0.45) 4px,
+        transparent 5px
+      ),
+      radial-gradient(
+        circle at 30% 40%,
+        rgba(255,255,255,0.65) 0 1px,
+        transparent 2px
+      );
+
+    background-size: 100% 100%, 8px 8px;
+    mix-blend-mode: screen;
+    opacity: 0.36;
+  }
+
+  .ink-stamp--sm {
+    padding: 4px 7px;
+    font-size: 9px;
+  }
+
+  .ink-stamp--md {
+    padding: 6px 11px;
+    font-size: 12px;
+  }
+
+  .ink-stamp--lg {
+    padding: 9px 15px;
+    font-size: 16px;
+    border-width: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ink-stamp {
+      transition: none;
+    }
+  }
+</style>

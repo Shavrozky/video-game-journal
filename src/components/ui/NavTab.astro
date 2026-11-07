@@ -1,0 +1,104 @@
+---
+// src/components/ui/NavTab.astro
+
+import JournalIcon from './JournalIcon.astro';
+
+interface Props {
+  href: string;
+  label: string;
+  icon: 'logs' | 'backlog' | 'archive' | 'catalog';
+  active?: boolean;
+}
+
+const {
+  href,
+  label,
+  icon,
+  active = false,
+} = Astro.props;
+---
+
+<a
+  href={href}
+  aria-current={active ? 'page' : undefined}
+  class:list={[
+    'journal-nav-tab',
+    active && 'journal-nav-tab--active',
+  ]}
+>
+  <JournalIcon
+    name={icon}
+    size={15}
+    strokeWidth={1.7}
+  />
+
+  <span>{label}</span>
+</a>
+
+<style>
+  .journal-nav-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+
+    height: 50px;
+    padding: 0 1.5rem;
+
+    border: 2px solid #3d3830;
+    border-bottom: 0;
+    border-radius: 6px 6px 0 0;
+
+    background: #1d2025;
+    color: #929397;
+
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+
+    transition:
+      background-color 180ms ease,
+      color 180ms ease,
+      transform 180ms ease;
+  }
+
+  .journal-nav-tab:hover {
+    background: #292d33;
+    color: #f5f1e9;
+  }
+
+  .journal-nav-tab--active {
+    position: relative;
+    background: var(--color-paper-light);
+    color: var(--color-paper-ink);
+    transform: translateY(2px);
+  }
+
+  .journal-nav-tab--active:hover {
+    background: var(--color-paper-light);
+    color: var(--color-paper-ink);
+  }
+
+  .journal-nav-tab:focus-visible {
+    outline: 2px solid #c29d62;
+    outline-offset: 3px;
+  }
+
+  @media (max-width: 480px) {
+    .journal-nav-tab {
+      height: 46px;
+      padding: 0 0.85rem;
+      font-size: 9px;
+      gap: 0.4rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .journal-nav-tab {
+      transition: none;
+    }
+  }
+</style>

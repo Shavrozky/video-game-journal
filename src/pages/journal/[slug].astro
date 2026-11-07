@@ -1,0 +1,326 @@
+---
+import { getCollection, render } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+
+import NotebookLayout from '../../layouts/NotebookLayout.astro';
+import MiniBoxArt from '../../components/MiniBoxArt.astro';
+import ArchiveCover from '../../components/ArchiveCover.astro';
+import InkStamp from '../../components/InkStamp.astro';
+import JournalIcon from '../../components/ui/JournalIcon.astro';
+
+import { backlogGames } from '../../data/backlog';
+
+import {
+  gameForEntry,
+  journalPath,
+  franchisePath,
+  sortJournals,
+} from '../../lib/journal';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('journal');
+
+  return entries.map((entry) => ({
+    params: {
+      slug: entry.id,
+    },
+    props: {
+      entry,
+    },
+  }));
+}
+
+interface Props {
+  entry: CollectionEntry<'journal'>;
+}
+
+const { entry } = Astro.props;
+
+const { Content } = await render(entry);
+
+const game = gameForEntry(entry);
+
+const isSession =
+  entry.data.entryType === 'session';
+
+const allEntries = sortJournals(
+  await getCollection('journal')
+);
+
+const related = game
+  ? allEntries.filter(
+      (log) =>
+        log.id !== entry.id &&
+        gameForEntry(log)?.franchise === game.franchise
+    ).slice(0, 5)
+  : [];
+
+const siblings = game
+  ? backlogGames.filter(
+      (item) =>
+        item.franchise === game.franchise &&
+        item.id !== game.id
+    ).slice(0, 5)
+  : [];
+
+const published = entry.data.publishDate.toLocaleDateString(
+  'id-ID',
+  {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }
+);
+---
+
+<NotebookLayout activeTab="logs">
+
+  <article class="mx-auto max-w-6xl">
+
+    <!-- ARTICLE IDENTIFIER -->
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-dashed border-[#cfc7b8] pb-3 font-mono text-[9px] uppercase tracking-[0.16em] text-paper-muted">
+
+      <span>
+        {isSession ? 'FIELD LOG' : 'ARCHIVE NOTE'}
+        // {entry.id.toUpperCase()}
+      </span>
+
+      <span>
+        {isSession
+          ? 'PERSONAL SESSION'
+          : 'CATATAN KURASI / SEBELUM BERMAIN'}
+      </span>
+
+    </div>
+
+    <!-- ARTICLE HEADER -->
+    <header class="grid grid-cols-1 gap-7 lg:grid-cols-[155px_minmax(0,1fr)]">
+
+      <div>
+        {
+          entry.data.boxArtUrl ? (
+            <MiniBoxArt
+              title={entry.data.game}
+              imageUrl={entry.data.boxArtUrl}
+              platform={entry.data.platform}
+              rotation="rotate-[-1deg]"
+            />
+          ) : (
+            <ArchiveCover
+              title={entry.data.game}
+              cover={game?.cover}
+              platform={entry.data.platform}
+              class="w-32 border-4 border-white shadow-md"
+            />
+          )
+        }
+      </div>
+
+      <div class="min-w-0">
+
+        <div class="mb-3 flex flex-wrap gap-3 font-mono text-[10px] uppercase text-paper-muted">
+
+          <span class="bg-stone-300 px-2 py-1 font-bold text-stone-800">
+            {entry.data.sessionTime}
+          </span>
+
+          {
+            game && (
+              <span class="text-red-800">
+                {game.franchise}
+              </span>
+            )
+          }
+
+        </div>
+
+        <h2 class="max-w-4xl font-serif text-3xl font-bold leading-tight text-neutral-950 md:text-4xl">
+          {entry.data.title}
+        </h2>
+
+        <p class="mt-3 max-w-4xl font-serif text-base leading-relaxed text-neutral-700">
+          {entry.data.excerpt ??
+            (isSession
+              ? `Catatan sesi pribadi tentang ${entry.data.game}.`
+              : `Catatan pengantar untuk ${entry.data.game}.`)}
+        </p>
+
+        <!-- METADATA -->
+        <div class="mt-6 grid grid-cols-2 gap-4 border-y border-[#ddd5c5] py-4 font-mono text-[10px] md:grid-cols-4">
+
+          <div>
+            <div class="text-paper-muted">GAME</div>
+            <div class="mt-1 font-bold text-neutral-900">
+              {entry.data.game}
+            </div>
+          </div>
+
+          <div>
+            <div class="text-paper-muted">PLATFORM</div>
+            <div class="mt-1 font-bold text-neutral-900">
+              {entry.data.platform}
+            </div>
+          </div>
+
+          <div>
+            <div class="text-paper-muted">STATUS</div>
+            <div class="mt-2">
+              <InkStamp
+                status={entry.data.status}
+                size="sm"
+                tone="red"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div class="text-paper-muted">DATE</div>
+            <div class="mt-1 font-bold text-neutral-900">
+              {published}
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </header>
+
+    <!-- ARTICLE BODY + SIDEBAR -->
+    <div class="mt-10 grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1fr)_280px]">
+
+      <div
+        class="prose prose-neutral max-w-none font-serif text-[18px] leading-[1.85] prose-headings:text-neutral-950 prose-p:text-[#34312c] prose-strong:text-neutral-950 prose-blockquote:border-amber-800 prose-blockquote:text-neutral-700"
+      >
+        <Content />
+      </div>
+
+      <aside class="space-y-5 xl:sticky xl:top-24 xl:self-start">
+
+        <!-- LINKED REGISTRY -->
+        {
+          game && (
+            <section class="border border-dashed border-[#b8b09f] bg-[#f7f3e9] p-4">
+
+              <h3 class="flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+                <JournalIcon name="archive" size={13} />
+                Linked Registry
+              </h3>
+
+              <p class="mt-3 font-serif text-sm leading-relaxed text-neutral-700">
+                {game.title} terdaftar pada nomor
+                {' '}
+                {String(game.registry).padStart(2, '0')}
+                {' '}
+                di arsip {game.franchise}.
+              </p>
+
+              <a
+                href={`${franchisePath(game.franchise)}#game-${game.id}`}
+                class="mt-3 inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase text-amber-900 hover:underline"
+              >
+                Lihat Registry
+                <JournalIcon name="arrow" size={12} />
+              </a>
+
+            </section>
+          )
+        }
+
+        <!-- NOTE TYPE -->
+        <section class="border border-dashed border-[#b8b09f] bg-[#f7f3e9] p-4">
+
+          <h3 class="font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+            Observation Type
+          </h3>
+
+          <p class="mt-3 font-mono text-[10px] leading-relaxed text-paper-muted">
+            {isSession
+              ? 'Catatan ini merupakan dokumentasi pengalaman bermain pribadi.'
+              : 'Ini adalah catatan pengantar dan kurasi. Belum dianggap sebagai pengalaman bermain pribadi.'}
+          </p>
+
+        </section>
+
+        <!-- RELATED JOURNAL ENTRIES -->
+        {
+          related.length > 0 && (
+            <section class="border border-[#d5cbb8] bg-[#f1ebdf] p-4">
+
+              <h3 class="mb-3 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+                Catatan Seri Terkait
+              </h3>
+
+              <div class="space-y-3">
+
+                {related.map((log) => (
+                  <a
+                    href={journalPath(log)}
+                    class="block border-b border-[#d9cfbc] pb-2 font-serif text-sm font-semibold text-neutral-800 hover:text-red-900 hover:underline"
+                  >
+                    {log.data.title}
+                  </a>
+                ))}
+
+              </div>
+            </section>
+          )
+        }
+
+        <!-- RELATED GAMES -->
+        {
+          siblings.length > 0 && (
+            <section class="border border-[#d5cbb8] bg-[#f8f5ef] p-4">
+
+              <h3 class="mb-3 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+                Di Registry Seri Ini
+              </h3>
+
+              <ul class="space-y-2 font-serif text-sm text-neutral-700">
+
+                {siblings.map((item) => (
+                  <li>
+                    <a
+                      href={`${franchisePath(item.franchise)}#game-${item.id}`}
+                      class="hover:underline"
+                    >
+                      {item.title}
+                    </a>
+                  </li>
+                ))}
+
+              </ul>
+
+            </section>
+          )
+        }
+
+      </aside>
+    </div>
+
+    <!-- ARTICLE FOOTER -->
+    <div class="mt-14 flex flex-wrap items-center justify-between gap-4 border-t border-dashed border-[#cfc7b8] pt-5">
+
+      <a
+        href="/"
+        class="inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase text-neutral-700 hover:underline"
+      >
+        <JournalIcon
+          name="arrow"
+          size={12}
+          class="rotate-180"
+        />
+
+        Kembali ke Field Logs
+      </a>
+
+      <InkStamp
+        status={entry.data.status}
+        size="sm"
+        tone="red"
+      />
+
+    </div>
+
+  </article>
+
+</NotebookLayout>

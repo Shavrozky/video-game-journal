@@ -1,0 +1,62 @@
+---
+// src/components/NotebookTab.astro
+// Legacy/alternate notebook chrome. Not currently imported by any page, but
+// kept working (it referenced <NavTab> without importing it).
+import '../styles/global.css';
+
+import NavTab from './ui/NavTab.astro';
+
+interface Props {
+  activeTab?: 'logs' | 'backlog' | 'catalog' | 'favorites';
+}
+const { activeTab = 'logs' } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Game Field Journal</title>
+</head>
+<body class="bg-[#121316] text-paper-ink min-h-screen py-6 px-3 sm:px-6 flex justify-center">
+
+  <!-- Binding / Binder Luar -->
+  <div class="relative w-full max-w-4xl bg-paper-light border-2 border-[#3d3830] rounded-sm notebook-grid p-6 sm:p-12 shadow-2xl">
+    
+    <!-- Tab Navigasi Samping -->
+      <nav class="ml-auto flex h-full items-end gap-2">
+        <NavTab
+          href="/"
+          label="Field Logs"
+          icon="logs"
+          active={activeTab === 'logs'}
+        />
+
+        <NavTab
+          href="/backlog"
+          label="Backlog Shelf"
+          icon="backlog"
+          active={activeTab === 'backlog'}
+        />
+    </nav>
+
+    <!-- Header Jurnal -->
+    <header class="border-b-2 border-dashed border-[#c5beaf] pb-4 mb-8 flex justify-between items-baseline">
+      <div>
+        <h1 class="font-mono text-2xl font-bold tracking-tight text-neutral-900">ARCHIVE // FIELD JOURNAL</h1>
+        <p class="font-mono text-xs text-paper-muted mt-0.5">Catatan Perjalanan & Retrospektif Naratif Video Game</p>
+      </div>
+      <div class="border border-[#b5ad9e] px-2.5 py-1 text-[11px] font-mono text-paper-muted rounded-xs bg-[#f4eee1]">
+        VOL. 01 / 2026[cite: 1]
+      </div>
+    </header>
+
+    <!-- Konten Utama Halaman -->
+    <main>
+      <slot />
+    </main>
+  </div>
+
+</body>
+</html>

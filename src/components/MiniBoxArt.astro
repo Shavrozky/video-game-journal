@@ -1,0 +1,47 @@
+---
+interface Props {
+  title: string;
+  imageUrl: string;
+  platform?: string;
+  rotation?: string;
+}
+
+const {
+  title,
+  imageUrl,
+  platform = 'PC',
+  rotation = 'rotate-0',
+} = Astro.props;
+---
+
+<div
+  class={`sticker-card inline-block rounded-sm border border-neutral-300 bg-white p-1.5 ${rotation}`}
+>
+  <div class="relative h-36 w-28 overflow-hidden rounded-sm bg-neutral-900">
+    <img
+      src={imageUrl}
+      alt={title}
+      class="h-full w-full object-cover"
+    />
+
+    <span
+      class="absolute left-1 top-1
+             bg-black/80
+             px-1 py-0.5
+             font-mono text-[9px]
+             uppercase tracking-wider
+             text-white"
+    >
+      {platform}
+    </span>
+  </div>
+
+  <p
+    class="mt-1 max-w-[112px] truncate
+           text-center
+           font-mono text-[11px] font-medium
+           text-neutral-800"
+  >
+    {title}
+  </p>
+</div>

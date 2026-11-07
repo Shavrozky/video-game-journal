@@ -1,0 +1,370 @@
+---
+import { getCollection } from 'astro:content';
+
+import NotebookLayout from '../../layouts/NotebookLayout.astro';
+import ArchiveCover from '../../components/ArchiveCover.astro';
+import InkStamp from '../../components/InkStamp.astro';
+import JournalIcon from '../../components/ui/JournalIcon.astro';
+
+import {
+  backlogGames,
+  type BacklogGame,
+} from '../../data/backlog';
+
+import {
+  journalsForGame,
+  journalPath,
+  franchisePath,
+} from '../../lib/journal';
+
+interface Props {
+  game: BacklogGame;
+}
+
+export function getStaticPaths() {
+  return backlogGames.map((game) => ({
+    params: {
+      id: game.id,
+    },
+    props: {
+      game,
+    },
+  }));
+}
+
+const { game } = Astro.props;
+
+const allEntries = await getCollection('journal');
+
+const relatedEntries = journalsForGame(
+  allEntries,
+  game.id
+);
+
+const sessionLogs = relatedEntries.filter(
+  (entry) => entry.data.entryType === 'session'
+);
+
+const archiveNotes = relatedEntries.filter(
+  (entry) => entry.data.entryType === 'overview'
+);
+
+const relatedGames = backlogGames.filter(
+  (item) =>
+    item.franchise === game.franchise &&
+    item.id !== game.id
+);
+
+const registryNumber = String(
+  game.registry
+).padStart(2, '0');
+---
+
+<NotebookLayout activeTab="backlog">
+
+  <article class="mx-auto max-w-6xl space-y-9">
+
+    <!-- BREADCRUMB -->
+    <nav
+      aria-label="Breadcrumb"
+      class="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-paper-muted"
+    >
+      <a href="/backlog" class="hover:underline">
+        Backlog Shelf
+      </a>
+
+      <span>/</span>
+
+      <a
+        href={franchisePath(game.franchise)}
+        class="hover:underline"
+      >
+        {game.franchise}
+      </a>
+
+      <span>/</span>
+
+      <span class="font-bold text-neutral-900">
+        {registryNumber}
+      </span>
+    </nav>
+
+    <!-- GAME PROFILE HEADER -->
+    <section
+      class="grid grid-cols-1 gap-8 border-b border-dashed border-[#cfc7b8] pb-8 md:grid-cols-[190px_minmax(0,1fr)]"
+    >
+      <ArchiveCover
+        title={game.title}
+        cover={game.cover}
+        platform={game.platform}
+        class="w-full max-w-[190px] rotate-[-1deg] border-6 border-white shadow-lg"
+      />
+
+      <div class="min-w-0">
+
+        <div class="mb-3 flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-wider text-paper-muted">
+          <span>Registry No. {registryNumber}</span>
+          <span>{game.franchise}</span>
+          <span>{game.year}</span>
+        </div>
+
+        <h2
+          class="font-serif text-4xl font-bold leading-tight text-neutral-950 md:text-5xl"
+        >
+          {game.title}
+        </h2>
+
+        <p class="mt-4 max-w-3xl font-serif text-lg leading-relaxed text-neutral-700">
+          {game.reason}
+        </p>
+
+        <!-- GAME METADATA -->
+        <div
+          class="mt-7 grid grid-cols-2 gap-5 border-t border-[#d6cdbb] pt-5 font-mono text-[10px] md:grid-cols-4"
+        >
+          <div>
+            <p class="text-paper-muted">PLATFORM</p>
+            <p class="mt-1 font-bold text-neutral-900">
+              {game.platform}
+            </p>
+          </div>
+
+          <div>
+            <p class="text-paper-muted">GENRE</p>
+            <p class="mt-1 font-bold text-neutral-900">
+              {game.genre}
+            </p>
+          </div>
+
+          <div>
+            <p class="text-paper-muted">PRIORITY</p>
+            <p class="mt-1 font-bold text-neutral-900">
+              {game.priority}
+            </p>
+          </div>
+
+          <div>
+            <p class="text-paper-muted">BACKLOG STATUS</p>
+            <p class="mt-1 font-bold text-red-900">
+              {game.status.toUpperCase()}
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- LINKED JOURNALS -->
+    <div
+      class="grid grid-cols-1 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_280px]"
+    >
+      <div class="space-y-9">
+
+        <!-- PERSONAL FIELD LOGS -->
+        <section class="space-y-4">
+
+          <div
+            class="flex items-center gap-3 border-b border-[#d6cdbb] pb-3"
+          >
+            <JournalIcon name="logs" size={16} />
+
+            <h3
+              class="font-mono text-xs font-bold uppercase tracking-wider text-neutral-900"
+            >
+              Personal Field Logs
+            </h3>
+
+            <span class="ml-auto font-mono text-[10px] text-paper-muted">
+              {sessionLogs.length} Records
+            </span>
+          </div>
+
+          {
+            sessionLogs.length === 0 ? (
+              <div
+                class="border border-dashed border-[#c5b9a5] bg-[#f7f3e9] p-6"
+              >
+                <p class="font-serif text-base text-neutral-700">
+                  Belum ada pengalaman bermain pribadi yang
+                  didokumentasikan untuk game ini.
+                </p>
+
+                <p class="mt-2 font-mono text-[10px] text-paper-muted">
+                  AWAITING FIRST FIELD SESSION
+                </p>
+              </div>
+            ) : (
+              <div class="space-y-3">
+                {sessionLogs.map((entry) => (
+                  <a
+                    href={journalPath(entry)}
+                    class="group block border border-[#d4cabb] bg-[#f3ede1] p-5 transition-colors hover:border-neutral-800"
+                  >
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+
+                      <div>
+                        <p
+                          class="font-mono text-[9px] uppercase tracking-wider text-paper-muted"
+                        >
+                          SESSION LOG / {entry.data.sessionTime}
+                        </p>
+
+                        <h4
+                          class="mt-2 font-serif text-xl font-bold text-neutral-900 group-hover:underline"
+                        >
+                          {entry.data.title}
+                        </h4>
+                      </div>
+
+                      <InkStamp
+                        status={entry.data.status}
+                        size="sm"
+                      />
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )
+          }
+
+        </section>
+
+        <!-- EDITORIAL NOTES -->
+        <section class="space-y-4">
+
+          <div
+            class="flex items-center gap-3 border-b border-[#d6cdbb] pb-3"
+          >
+            <JournalIcon name="archive" size={16} />
+
+            <h3
+              class="font-mono text-xs font-bold uppercase tracking-wider text-neutral-900"
+            >
+              Catatan Kurasi
+            </h3>
+
+            <span class="ml-auto font-mono text-[10px] text-paper-muted">
+              {archiveNotes.length} Records
+            </span>
+          </div>
+
+          {
+            archiveNotes.length === 0 ? (
+              <p
+                class="border border-dashed border-[#c5b9a5] p-5 font-serif text-neutral-600"
+              >
+                Belum ada catatan kurasi untuk game ini.
+              </p>
+            ) : (
+              <div class="space-y-3">
+                {archiveNotes.map((entry) => (
+                  <a
+                    href={journalPath(entry)}
+                    class="group flex items-center justify-between gap-4 border border-[#d4cabb] bg-[#f3ede1] p-5 hover:border-neutral-800"
+                  >
+                    <div>
+                      <p
+                        class="font-mono text-[9px] uppercase text-paper-muted"
+                      >
+                        ARCHIVE NOTE
+                      </p>
+
+                      <h4
+                        class="mt-2 font-serif text-xl font-bold text-neutral-900 group-hover:underline"
+                      >
+                        {entry.data.title}
+                      </h4>
+                    </div>
+
+                    <JournalIcon name="arrow" size={17} />
+                  </a>
+                ))}
+              </div>
+            )
+          }
+
+        </section>
+
+      </div>
+
+      <!-- SERIES SIDEBAR -->
+      <aside class="space-y-5">
+
+        <section
+          class="border border-[#cfc4b0] bg-[#f1ebdf] p-5"
+        >
+          <h3
+            class="font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900"
+          >
+            Related Games
+          </h3>
+
+          <p class="mt-1 font-mono text-[9px] text-paper-muted">
+            {game.franchise}
+          </p>
+
+          <div class="mt-5 space-y-2">
+
+            {
+              relatedGames.map((related) => (
+                <a
+                  href={`/games/${related.id}`}
+                  class="flex items-center justify-between gap-3 border-b border-[#d7cebc] py-2 font-serif text-sm text-neutral-800 hover:text-red-900"
+                >
+                  <span>{related.title}</span>
+
+                  <span class="font-mono text-[9px] text-paper-muted">
+                    {String(related.registry).padStart(2, '0')}
+                  </span>
+                </a>
+              ))
+            }
+
+          </div>
+        </section>
+
+        <section
+          class="border border-dashed border-[#cfc4b0] bg-[#f8f5ee] p-5"
+        >
+          <div class="flex items-center gap-2">
+            <JournalIcon name="note" size={14} />
+
+            <h3
+              class="font-mono text-[10px] font-bold uppercase"
+            >
+              Archive Protocol
+            </h3>
+          </div>
+
+          <p
+            class="mt-3 font-serif text-sm leading-relaxed text-neutral-700"
+          >
+            Setiap game memiliki satu profil arsip,
+            tetapi dapat menyimpan banyak catatan
+            sesi dan artikel kurasi.
+          </p>
+        </section>
+
+      </aside>
+    </div>
+
+    <div class="border-t border-dashed border-[#cfc7b8] pt-5">
+
+      <a
+        href="/backlog"
+        class="inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase text-amber-900 hover:underline"
+      >
+        <JournalIcon
+          name="arrow"
+          size={13}
+          class="rotate-180"
+        />
+
+        Kembali ke Backlog Shelf
+      </a>
+
+    </div>
+
+  </article>
+
+</NotebookLayout>
