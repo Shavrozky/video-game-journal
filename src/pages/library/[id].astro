@@ -1,0 +1,515 @@
+---
+/**
+ * /library/[id] — personal game profile.
+ *
+ * Rendered on demand so games added after a build still resolve. Shows both:
+ *   1. database-backed Field Logs (personal_field_logs)
+ *   2. legacy Markdown logs from the Content Collection, matched on legacyGameId
+ *
+ * A log is only counted once in each list; the two lists are visually distinct
+ * so a curated note is never mistaken for a session log.
+ */
+
+import { getCollection } from 'astro:content';
+
+import NotebookLayout from '../../layouts/NotebookLayout.astro';
+import ArchiveCover from '../../components/ArchiveCover.astro';
+import InkStamp from '../../components/InkStamp.astro';
+import JournalIcon from '../../components/ui/JournalIcon.astro';
+
+import { ensureDatabase } from '../../lib/server/http';
+import { getGameById } from '../../lib/server/library-repository';
+import { countLogsForGame, listLogsForGame } from '../../lib/server/field-log-repository';
+import { journalsForGame, journalPath } from '../../lib/journal';
+import { getGame as getCatalogGame } from '../../lib/catalog/store';
+import { markdownExcerpt } from '../../lib/server/markdown';
+
+export const prerender = false;
+
+ensureDatabase();
+
+const id = Astro.params.id ?? '';
+const game = id ? getGameById(id) : null;
+
+if (!game) {
+  Astro.response.status = 404;
+}
+
+const logs = game ? listLogsForGame(game.id) : [];
+const logCount = game ? countLogsForGame(game.id) : 0;
+
+// Legacy Markdown entries: only for records that still carry their legacy id.
+const legacyLogs = game?.legacyGameId ? journalsForGame(await getCollection('journal'), game.legacyGameId) : [];
+
+const sessionLegacy = legacyLogs.filter((entry) => entry.data.entryType === 'session');
+const curatedLegacy = legacyLogs.filter((entry) => entry.data.entryType === 'overview');
+
+const catalogGame = game?.steamAppId ? await getCatalogGame(game.steamAppId) : null;
+
+const notice = Astro.url.searchParams.get('notice');
+const notices: Record<string, string> = {
+  added: 'Game ditambahkan ke Personal Library.',
+  updated: 'Perubahan tersimpan.',
+  logcreated: 'Field Log dibuat.',
+  logupdated: 'Field Log tersimpan.',
+  logdeleted: 'Field Log dihapus.',
+};
+
+const formatDate = (value: string | null) => {
+  if (!value) return '—';
+  const parsed = new Date(`${value.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+};
+
+const formatDuration = (minutes: number | null) => {
+  if (minutes === null) return '—';
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest}m`;
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+};
+---
+
+<NotebookLayout
+  activeTab="backlog"
+  headTitle={game ? `${game.title} — Personal Library` : 'Record Not Found'}
+  kicker="Personal Archive"
+  kickerSuffix="Vol. 01 / Library Record"
+  title={game ? 'LIBRARY RECORD' : 'RECORD NOT FOUND'}
+  subtitle="Catatan pribadi: status, progres, dan jurnal sesi milikmu. Terpisah dari katalog Steam."
+  footerLabel="Personal Library // Record Detail"
+  pageLabel={game ? `Ref. ${game.id.slice(0, 8)}` : 'Unresolved'}
+  sideIndexLabel="LIBRARY // PC"
+>
+  <article class="mx-auto max-w-6xl space-y-9">
+    <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-paper-muted">
+      <a href="/backlog" class="hover:underline">Backlog Shelf</a>
+      <span>/</span>
+      <span class="font-bold text-neutral-900">{game ? game.title : 'Not Found'}</span>
+    </nav>
+
+    {
+      notice && notices[notice] && (
+        <div class="flex items-start gap-3 border border-[#8a9a7a] bg-[#eef2e6] px-4 py-3" role="status">
+          <JournalIcon name="status" size={14} />
+          <p class="font-mono text-[10px] uppercase tracking-wider text-[#3f5d3a]">{notices[notice]}</p>
+        </div>
+      )
+    }
+
+    {
+      !game && (
+        <section class="space-y-5 border-2 border-[#8e3029] bg-[#f6e9e5] p-7">
+          <h2 class="flex items-center gap-2 font-mono text-sm font-bold uppercase tracking-wider text-[#8e3029]">
+            <JournalIcon name="status" size={16} />
+            Record Not Found
+          </h2>
+          <p class="max-w-2xl font-serif text-base leading-relaxed text-neutral-800">
+            Tidak ada game dengan ID tersebut di Personal Library. Mungkin sudah
+            dihapus. Katalog Steam tidak terpengaruh.
+          </p>
+          <a href="/backlog" class="inline-flex items-center gap-2 border border-[#8e3029] px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-[#8e3029] hover:bg-[#8e3029] hover:text-[#fbf7ef]">
+            <JournalIcon name="arrow" size={12} class="rotate-180" />
+            Back to Backlog
+          </a>
+        </section>
+      )
+    }
+
+    {
+      game && (
+        <>
+          <!-- HERO -->
+          <section class="grid grid-cols-1 gap-8 border-b border-dashed border-[#cfc7b8] pb-8 md:grid-cols-[190px_minmax(0,1fr)]">
+            <ArchiveCover
+              title={game.title}
+              cover={game.coverUrl ?? undefined}
+              platform={game.platform}
+              class="w-full max-w-[190px] rotate-[-1deg] border-6 border-white shadow-lg"
+            />
+
+            <div class="min-w-0">
+              <div class="mb-3 flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-wider text-paper-muted">
+                <span class="border border-[#c4b9a5] bg-[#efe8da] px-1.5 py-0.5">
+                  {game.source === 'steam' ? 'Steam' : game.source === 'manual' ? 'Manual' : 'Legacy'}
+                </span>
+                <span>{game.platform}</span>
+                {game.releaseYear && <span>{game.releaseYear}</span>}
+                {game.steamAppId && <span>App {game.steamAppId}</span>}
+              </div>
+
+              <h2 class="font-serif text-4xl font-bold leading-tight text-neutral-950 md:text-5xl">
+                {game.title}
+              </h2>
+
+              {
+                game.genre && (
+                  <p class="mt-2 font-mono text-[10px] uppercase tracking-wider text-red-800">{game.genre}</p>
+                )
+              }
+
+              <p class="mt-4 max-w-3xl font-serif text-lg leading-relaxed text-neutral-700">
+                {game.notes ?? 'Belum ada catatan pribadi untuk game ini.'}
+              </p>
+
+              <!-- STATE -->
+              <div class="mt-6 flex flex-wrap items-center gap-3">
+                <InkStamp status={game.status} size="md" tone={game.status === 'Next' ? 'red' : 'black'} />
+                <span class="border border-[#b9ae9c] px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-wider text-neutral-600">
+                  Priority {game.priority}
+                </span>
+                <span class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                  {logCount} Field Log
+                </span>
+              </div>
+
+              <!-- PRIMARY ACTIONS -->
+              <div class="mt-6 flex flex-wrap items-center gap-3 border-t border-[#d6cdbb] pt-5">
+                <a
+                  href={`/library/${game.id}/edit`}
+                  class="inline-flex items-center gap-2 border border-[#493831] bg-[#342b27] px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-wider text-[#fff8ed] hover:bg-[#743c34]"
+                >
+                  <JournalIcon name="note" size={12} />
+                  Edit Game
+                </a>
+
+                <a
+                  href={`/library/${game.id}/logs/new`}
+                  class="inline-flex items-center gap-2 border border-[#8b7660] px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-700 hover:bg-[#dfd6c6]"
+                >
+                  <JournalIcon name="logs" size={12} />
+                  Create Field Log
+                </a>
+
+                {
+                  game.legacyGameId && (
+                    <a
+                      href={`/games/${game.legacyGameId}`}
+                      class="inline-flex items-center gap-2 border border-[#c4b9a5] px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-600 hover:bg-[#dfd6c6]"
+                    >
+                      Legacy Profile
+                    </a>
+                  )
+                }
+
+                {
+                  catalogGame && (
+                    <a
+                      href={`/catalog/${catalogGame.appId}`}
+                      class="inline-flex items-center gap-2 border border-[#c4b9a5] px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-600 hover:bg-[#dfd6c6]"
+                    >
+                      <JournalIcon name="catalog" size={12} />
+                      Steam Catalog
+                    </a>
+                  )
+                }
+              </div>
+            </div>
+          </section>
+
+          <!-- METRICS -->
+          <section class="space-y-4">
+            <div class="flex items-center gap-3 border-b border-[#d6cdbb] pb-3">
+              <JournalIcon name="status" size={16} />
+              <h3 class="font-mono text-xs font-bold uppercase tracking-wider text-neutral-900">
+                Personal Metrics
+              </h3>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <div class="border border-[#cfc4b0] bg-[#f1ebdf] p-4">
+                <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">Hours Played</p>
+                <p class="mt-2 font-serif text-2xl font-bold text-neutral-950">
+                  {game.hoursPlayed ?? '—'}
+                </p>
+              </div>
+
+              <div class="border border-[#cfc4b0] bg-[#f1ebdf] p-4">
+                <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">Progress</p>
+                <p class="mt-2 font-serif text-2xl font-bold text-neutral-950">
+                  {game.progressPercent !== null ? `${game.progressPercent}%` : '—'}
+                </p>
+              </div>
+
+              <div class="border border-[#cfc4b0] bg-[#f1ebdf] p-4">
+                <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">Rating</p>
+                <p class="mt-2 font-serif text-2xl font-bold text-neutral-950">
+                  {game.personalRating !== null ? `${game.personalRating}/10` : '—'}
+                </p>
+              </div>
+
+              <div class="border border-[#cfc4b0] bg-[#f1ebdf] p-4">
+                <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">Started</p>
+                <p class="mt-2 font-mono text-[11px] font-bold text-neutral-900">
+                  {formatDate(game.startedAt)}
+                </p>
+              </div>
+
+              <div class="border border-[#cfc4b0] bg-[#f1ebdf] p-4">
+                <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">Completed</p>
+                <p class="mt-2 font-mono text-[11px] font-bold text-neutral-900">
+                  {formatDate(game.completedAt)}
+                </p>
+              </div>
+
+              <div class="border border-[#cfc4b0] bg-[#f1ebdf] p-4">
+                <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">Added</p>
+                <p class="mt-2 font-mono text-[11px] font-bold text-neutral-900">
+                  {formatDate(game.createdAt)}
+                </p>
+              </div>
+            </div>
+
+            {
+              game.progressPercent !== null && (
+                <div class="border border-[#cfc4b0] bg-[#f8f5ee] p-3">
+                  <div class="h-2 w-full overflow-hidden border border-[#cfc7b8] bg-[#e8e1d3]">
+                    <div class="h-full bg-[#8e3029]" style={`width:${Math.min(100, Math.max(0, game.progressPercent))}%`}></div>
+                  </div>
+                </div>
+              )
+            }
+          </section>
+
+          <div class="grid grid-cols-1 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_300px]">
+            <div class="space-y-9">
+              <!-- DATABASE FIELD LOGS -->
+              <section class="space-y-4">
+                <div class="flex flex-wrap items-center gap-3 border-b border-[#d6cdbb] pb-3">
+                  <JournalIcon name="logs" size={16} />
+                  <h3 class="font-mono text-xs font-bold uppercase tracking-wider text-neutral-900">
+                    Field Logs
+                  </h3>
+                  <span class="ml-auto font-mono text-[10px] text-paper-muted">{logs.length} Records</span>
+                </div>
+
+                {
+                  logs.length === 0 ? (
+                    <div class="border border-dashed border-[#c5b9a5] bg-[#f7f3e9] p-6">
+                      <p class="font-serif text-base text-neutral-700">
+                        Belum ada Field Log untuk game ini.
+                      </p>
+                      <a
+                        href={`/library/${game.id}/logs/new`}
+                        class="mt-3 inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase tracking-wider text-amber-900 hover:underline"
+                      >
+                        Buat Field Log pertama
+                        <JournalIcon name="arrow" size={12} />
+                      </a>
+                    </div>
+                  ) : (
+                    <div class="space-y-3">
+                      {logs.map((log) => (
+                        <article class="border border-[#d4cabb] bg-[#f3ede1] p-5">
+                          <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div class="min-w-0">
+                              <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                                {log.publicationStatus === 'draft' ? 'DRAFT' : 'PUBLISHED'}
+                                {log.sessionDate ? ` / ${formatDate(log.sessionDate)}` : ''}
+                                {log.durationMinutes !== null ? ` / ${formatDuration(log.durationMinutes)}` : ''}
+                              </p>
+
+                              <h4 class="mt-2 font-serif text-xl font-bold text-neutral-900">
+                                <a href={`/library/logs/${log.id}`} class="hover:underline">{log.title}</a>
+                              </h4>
+
+                              {log.playerCondition && (
+                                <p class="mt-1 font-mono text-[9px] uppercase tracking-wider text-red-800">
+                                  Kondisi // {log.playerCondition}
+                                </p>
+                              )}
+
+                              <p class="mt-2 line-clamp-2 font-serif text-sm leading-relaxed text-neutral-600">
+                                {markdownExcerpt(log.contentMarkdown, 160) || 'Belum ada isi.'}
+                              </p>
+                            </div>
+
+                            <span
+                              class:list={[
+                                'shrink-0 border px-2 py-1 font-mono text-[8px] font-bold uppercase tracking-wider',
+                                log.publicationStatus === 'draft'
+                                  ? 'border-[#b8873a] bg-[#fbf3e2] text-[#8a5a13]'
+                                  : 'border-[#8a9a7a] bg-[#eef2e6] text-[#3f5d3a]',
+                              ]}
+                            >
+                              {log.publicationStatus}
+                            </span>
+                          </div>
+
+                          <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-[#e2dbcd] pt-3">
+                            <a href={`/library/logs/${log.id}`} class="inline-flex items-center gap-1 font-mono text-[9px] font-bold uppercase tracking-wider text-amber-900 hover:underline">
+                              Baca
+                              <JournalIcon name="arrow" size={11} />
+                            </a>
+                            <a href={`/library/logs/${log.id}/edit`} class="font-mono text-[9px] font-bold uppercase tracking-wider text-neutral-600 hover:underline">
+                              Edit
+                            </a>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )
+                }
+              </section>
+
+              <!-- LEGACY MARKDOWN LOGS -->
+              {
+                (sessionLegacy.length > 0 || curatedLegacy.length > 0) && (
+                  <section class="space-y-4">
+                    <div class="flex items-center gap-3 border-b border-[#d6cdbb] pb-3">
+                      <JournalIcon name="archive" size={16} />
+                      <h3 class="font-mono text-xs font-bold uppercase tracking-wider text-neutral-900">
+                        Markdown Journal
+                      </h3>
+                      <span class="ml-auto font-mono text-[10px] text-paper-muted">
+                        {sessionLegacy.length + curatedLegacy.length} Files
+                      </span>
+                    </div>
+
+                    {sessionLegacy.map((entry) => (
+                      <a
+                        href={journalPath(entry)}
+                        class="group block border border-[#d4cabb] bg-[#f3ede1] p-5 hover:border-neutral-800"
+                      >
+                        <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                          SESSION LOG / {entry.data.sessionTime}
+                        </p>
+                        <h4 class="mt-2 font-serif text-xl font-bold text-neutral-900 group-hover:underline">
+                          {entry.data.title}
+                        </h4>
+                      </a>
+                    ))}
+
+                    {curatedLegacy.map((entry) => (
+                      <a
+                        href={journalPath(entry)}
+                        class="group flex items-center justify-between gap-4 border border-[#d4cabb] bg-[#f7f3e9] p-5 hover:border-neutral-800"
+                      >
+                        <div>
+                          <p class="font-mono text-[9px] uppercase text-paper-muted">CATATAN KURASI</p>
+                          <h4 class="mt-2 font-serif text-xl font-bold text-neutral-900 group-hover:underline">
+                            {entry.data.title}
+                          </h4>
+                        </div>
+                        <JournalIcon name="arrow" size={16} />
+                      </a>
+                    ))}
+                  </section>
+                )
+              }
+            </div>
+
+            <!-- SIDEBAR -->
+            <aside class="space-y-5">
+              <section class="border border-[#cfc4b0] bg-[#f1ebdf] p-5">
+                <h3 class="font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+                  Record Sources
+                </h3>
+
+                <dl class="mt-3 space-y-2 font-mono text-[10px]">
+                  <div class="flex justify-between gap-2">
+                    <dt class="text-paper-muted">Source</dt>
+                    <dd class="font-bold text-neutral-900">{game.source}</dd>
+                  </div>
+                  <div class="flex justify-between gap-2">
+                    <dt class="text-paper-muted">Steam AppID</dt>
+                    <dd class="font-bold text-neutral-900">{game.steamAppId ?? 'none'}</dd>
+                  </div>
+                  <div class="flex justify-between gap-2">
+                    <dt class="text-paper-muted">Legacy ID</dt>
+                    <dd class="truncate font-bold text-neutral-900">{game.legacyGameId ?? 'none'}</dd>
+                  </div>
+                  <div class="flex justify-between gap-2">
+                    <dt class="text-paper-muted">Updated</dt>
+                    <dd class="font-bold text-neutral-900">{formatDate(game.updatedAt)}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <!-- DESTRUCTIVE -->
+              <section class="border border-[#d8b9b4] bg-[#fbf1ef] p-5">
+                <h3 class="font-mono text-[10px] font-bold uppercase tracking-wider text-[#8e3029]">
+                  Remove Record
+                </h3>
+
+                <p class="mt-2 font-serif text-sm leading-relaxed text-neutral-700">
+                  {logCount > 0
+                    ? `Game ini punya ${logCount} Field Log. Hapus Field Log terlebih dahulu, atau arsipkan dengan status Logged.`
+                    : 'Menghapus game dari library tidak menghapus entri katalog Steam maupun file Markdown.'}
+                </p>
+
+                {
+                  logCount === 0 ? (
+                    <button
+                      type="button"
+                      data-remove-game
+                      data-game-id={game.id}
+                      data-game-title={game.title}
+                      class="mt-3 inline-flex items-center gap-2 border border-[#8e3029] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#8e3029] hover:bg-[#8e3029] hover:text-[#fbf7ef]"
+                    >
+                      Remove From Library
+                    </button>
+                  ) : (
+                    <p class="mt-3 font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                      Removal blocked — {logCount} log(s) attached.
+                    </p>
+                  )
+                }
+
+                <p data-remove-status role="status" aria-live="polite" class="mt-2 font-mono text-[9px] text-[#8e3029]"></p>
+              </section>
+            </aside>
+          </div>
+        </>
+      )
+    }
+  </article>
+</NotebookLayout>
+
+<script>
+  import { apiRequest, notifyLibraryChanged, type ApiError } from '../../lib/client/library-api';
+
+  function initialise() {
+    const button = document.querySelector<HTMLButtonElement>('[data-remove-game]');
+    if (!button || button.dataset.wired === 'true') return;
+    button.dataset.wired = 'true';
+
+    button.addEventListener('click', async () => {
+      const id = button.dataset.gameId;
+      const title = button.dataset.gameTitle ?? 'game ini';
+
+      if (!id) return;
+
+      // Explicit, title-bearing confirmation.
+      const confirmed = window.confirm(
+        `Hapus "${title}" dari Personal Library?\n\n` +
+          'Entri katalog Steam dan file Markdown jurnal tidak akan terhapus.',
+      );
+
+      if (!confirmed) return;
+
+      const status = document.querySelector<HTMLElement>('[data-remove-status]');
+      button.disabled = true;
+      if (status) status.textContent = 'Menghapus…';
+
+      try {
+        await apiRequest(`/api/library/games/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        notifyLibraryChanged({ removedId: id });
+        window.location.href = '/backlog?notice=removed';
+      } catch (error) {
+        const apiError = error as ApiError;
+        if (status) status.textContent = apiError.message || 'Gagal menghapus.';
+        button.disabled = false;
+      }
+    });
+  }
+
+  document.addEventListener('astro:page-load', initialise);
+  initialise();
+</script>

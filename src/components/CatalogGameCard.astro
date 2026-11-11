@@ -12,6 +12,7 @@
  */
 
 import JournalIcon from './ui/JournalIcon.astro';
+import AddToBacklogButton from './AddToBacklogButton.astro';
 
 import type { CatalogGameSummary } from '../data/catalog/types';
 
@@ -98,5 +99,9 @@ const totalReviews =
       Record
       <JournalIcon name="arrow" size={11} />
     </a>
+  </div>
+
+  <div class="p-3 pt-0">
+    <AddToBacklogButton appId={game.appId} />
   </div>
 </article>

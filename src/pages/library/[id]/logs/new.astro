@@ -1,0 +1,83 @@
+---
+/**
+ * /library/[id]/logs/new — create a Field Log for a personal game.
+ */
+
+import NotebookLayout from '../../../../layouts/NotebookLayout.astro';
+import FieldLogEditor from '../../../../components/FieldLogEditor.astro';
+import JournalIcon from '../../../../components/ui/JournalIcon.astro';
+
+import { ensureDatabase } from '../../../../lib/server/http';
+import { getGameById } from '../../../../lib/server/library-repository';
+
+export const prerender = false;
+
+ensureDatabase();
+
+const id = Astro.params.id ?? '';
+const game = id ? getGameById(id) : null;
+
+if (!game) {
+  Astro.response.status = 404;
+}
+---
+
+<NotebookLayout
+  activeTab="backlog"
+  headTitle={game ? `New Field Log — ${game.title}` : 'Record Not Found'}
+  kicker="Personal Archive"
+  kickerSuffix="Vol. 01 / New Field Log"
+  title="NEW FIELD LOG"
+  subtitle="Catatan sesi pribadi. Simpan sebagai draft kapan saja, lalu terbitkan ketika sudah siap."
+  footerLabel="Personal Library // Field Log Editor"
+  pageLabel="Editor / New"
+  sideIndexLabel="LIBRARY // LOG"
+>
+  <article class="mx-auto max-w-6xl space-y-7">
+    <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-paper-muted">
+      <a href="/backlog" class="hover:underline">Backlog Shelf</a>
+      <span>/</span>
+      {game && <a href={`/library/${game.id}`} class="hover:underline">{game.title}</a>}
+      <span>/</span>
+      <span class="font-bold text-neutral-900">New Field Log</span>
+    </nav>
+
+    {
+      !game ? (
+        <section class="space-y-5 border-2 border-[#8e3029] bg-[#f6e9e5] p-7">
+          <h2 class="flex items-center gap-2 font-mono text-sm font-bold uppercase tracking-wider text-[#8e3029]">
+            <JournalIcon name="status" size={16} />
+            Game Not Found
+          </h2>
+          <p class="font-serif text-base text-neutral-800">
+            Field Log harus terhubung ke game di Personal Library.
+          </p>
+          <a href="/backlog" class="inline-flex items-center gap-2 border border-[#8e3029] px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-[#8e3029] hover:bg-[#8e3029] hover:text-[#fbf7ef]">
+            <JournalIcon name="arrow" size={12} class="rotate-180" />
+            Back to Backlog
+          </a>
+        </section>
+      ) : (
+        <>
+          <header class="border-b border-dashed border-[#cfc7b8] pb-5">
+            <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+              Linked Game / {game.platform}
+              {game.releaseYear ? ` / ${game.releaseYear}` : ''}
+            </p>
+            <h2 class="mt-1 font-serif text-3xl font-bold text-neutral-950">{game.title}</h2>
+            <p class="mt-2 font-serif text-sm text-neutral-600">
+              Catatan ini tersimpan di database, bukan sebagai file Markdown.
+              Entri Markdown lama tetap utuh dan terpisah.
+            </p>
+          </header>
+
+          <FieldLogEditor
+            mode="create"
+            game={game}
+            cancelHref={`/library/${game.id}`}
+          />
+        </>
+      )
+    }
+  </article>
+</NotebookLayout>

@@ -27,3 +27,6 @@ pnpm-debug.log*
 # local Steam dataset snapshot (raw ~77 MB) + generated catalog data
 .data/raw/
 .data/catalog/
+
+# Personal database
+.data/personal/

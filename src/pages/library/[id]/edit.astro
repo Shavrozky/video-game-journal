@@ -1,0 +1,452 @@
+---
+/**
+ * /library/[id]/edit — edit a personal game.
+ *
+ * Steam-sourced records only expose personal fields (status, priority, playtime,
+ * progress, rating, notes, dates): their title/cover/genre belong to the catalog
+ * identity and are shown read-only. Manual and legacy records can also be
+ * re-titled and re-covered.
+ */
+
+import NotebookLayout from '../../../layouts/NotebookLayout.astro';
+import ArchiveCover from '../../../components/ArchiveCover.astro';
+import JournalIcon from '../../../components/ui/JournalIcon.astro';
+
+import { ensureDatabase } from '../../../lib/server/http';
+import { getGameById } from '../../../lib/server/library-repository';
+import { GAME_STATUSES, PRIORITIES } from '../../../data/library/types';
+
+export const prerender = false;
+
+ensureDatabase();
+
+const id = Astro.params.id ?? '';
+const game = id ? getGameById(id) : null;
+
+if (!game) {
+  Astro.response.status = 404;
+}
+
+const identityEditable = game ? game.source !== 'steam' : false;
+---
+
+<NotebookLayout
+  activeTab="backlog"
+  headTitle={game ? `Edit ${game.title} — Personal Library` : 'Record Not Found'}
+  kicker="Personal Archive"
+  kickerSuffix="Vol. 01 / Edit Record"
+  title="EDIT RECORD"
+  subtitle="Perbarui status, progres, dan catatan pribadi. Perubahan tersimpan langsung ke arsip lokal."
+  footerLabel="Personal Library // Edit"
+  pageLabel={game ? `Ref. ${game.id.slice(0, 8)}` : 'Unresolved'}
+  sideIndexLabel="LIBRARY // EDIT"
+>
+  <article class="mx-auto max-w-5xl space-y-8">
+    <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-paper-muted">
+      <a href="/backlog" class="hover:underline">Backlog Shelf</a>
+      <span>/</span>
+      {game && <a href={`/library/${game.id}`} class="hover:underline">{game.title}</a>}
+      <span>/</span>
+      <span class="font-bold text-neutral-900">Edit</span>
+    </nav>
+
+    {
+      !game ? (
+        <section class="space-y-5 border-2 border-[#8e3029] bg-[#f6e9e5] p-7">
+          <h2 class="flex items-center gap-2 font-mono text-sm font-bold uppercase tracking-wider text-[#8e3029]">
+            <JournalIcon name="status" size={16} />
+            Record Not Found
+          </h2>
+          <a href="/backlog" class="inline-flex items-center gap-2 border border-[#8e3029] px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-[#8e3029] hover:bg-[#8e3029] hover:text-[#fbf7ef]">
+            <JournalIcon name="arrow" size={12} class="rotate-180" />
+            Back to Backlog
+          </a>
+        </section>
+      ) : (
+        <>
+          <header class="flex flex-wrap items-start gap-6 border-b border-dashed border-[#cfc7b8] pb-6">
+            <ArchiveCover
+              title={game.title}
+              cover={game.coverUrl ?? undefined}
+              platform={game.platform}
+              class="w-28 rotate-[-1deg] border-4 border-white shadow-md"
+            />
+
+            <div class="min-w-0 flex-1">
+              <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                {game.source === 'steam' ? 'Steam Import' : game.source === 'manual' ? 'Manual Entry' : 'Legacy Entry'}
+                {game.steamAppId ? ` / App ${game.steamAppId}` : ''}
+              </p>
+              <h2 class="mt-1 font-serif text-3xl font-bold text-neutral-950">{game.title}</h2>
+              <p class="mt-2 font-mono text-[10px] uppercase tracking-wider text-paper-muted">
+                {game.platform}{game.releaseYear ? ` / ${game.releaseYear}` : ''}
+              </p>
+            </div>
+          </header>
+
+          <form data-edit-game-form data-game-id={game.id} class="space-y-6" novalidate>
+            <div data-form-error class="hidden border-2 border-[#8e3029] bg-[#f6e9e5] p-4" role="alert">
+              <p data-form-error-text class="font-mono text-[10px] font-bold uppercase tracking-wider text-[#8e3029]"></p>
+            </div>
+
+            {
+              game.source === 'steam' && (
+                <p class="border border-[#cfc4b0] bg-[#f7f3e9] p-4 font-mono text-[9px] uppercase leading-relaxed tracking-wider text-paper-muted">
+                  Game ini berasal dari katalog Steam. Judul, sampul, dan genre mengikuti
+                  dataset global dan tidak dapat diubah dari sini — hanya data personal.
+                </p>
+              )
+            }
+
+            <!-- LIBRARY STATE -->
+            <fieldset class="border border-[#cfc4b0] bg-[#f4eee1] p-5">
+              <legend class="px-2 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+                Library State
+              </legend>
+
+              <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label for="status" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                    Status
+                  </label>
+                  <select id="status" name="status" class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800">
+                    {GAME_STATUSES.map((status) => (
+                      <option value={status} selected={game.status === status}>{status}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label for="platform" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                    Platform
+                  </label>
+                  <input
+                    id="platform"
+                    name="platform"
+                    type="text"
+                    maxlength="40"
+                    value={game.platform}
+                    class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+                  />
+                </div>
+
+                <div>
+                  <label for="priority" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                    Priority
+                  </label>
+                  <select id="priority" name="priority" class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800">
+                    {PRIORITIES.map((priority) => (
+                      <option value={priority} selected={game.priority === priority}>{priority}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </fieldset>
+
+            <!-- PROGRESS -->
+            <fieldset class="border border-[#cfc4b0] bg-[#f4eee1] p-5">
+              <legend class="px-2 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+                Play Progress
+              </legend>
+
+              <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label for="hoursPlayed" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                    Hours Played
+                  </label>
+                  <input
+                    id="hoursPlayed"
+                    name="hoursPlayed"
+                    type="number"
+                    min="0"
+                    max="100000"
+                    step="0.5"
+                    value={game.hoursPlayed ?? ''}
+                    placeholder="—"
+                    class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+                  />
+                </div>
+
+                <div>
+                  <label for="progressPercent" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                    Progress (%)
+                  </label>
+                  <input
+                    id="progressPercent"
+                    name="progressPercent"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={game.progressPercent ?? ''}
+                    placeholder="—"
+                    class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+                  />
+                </div>
+
+                <div>
+                  <label for="personalRating" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                    Personal Rating (1–10)
+                  </label>
+                  <input
+                    id="personalRating"
+                    name="personalRating"
+                    type="number"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value={game.personalRating ?? ''}
+                    placeholder="—"
+                    class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+                  />
+                </div>
+
+                <div>
+                  <label for="startedAt" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                    Started
+                  </label>
+                  <input
+                    id="startedAt"
+                    name="startedAt"
+                    type="date"
+                    value={game.startedAt?.slice(0, 10) ?? ''}
+                    class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+                  />
+                </div>
+
+                <div>
+                  <label for="completedAt" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                    Completed
+                  </label>
+                  <input
+                    id="completedAt"
+                    name="completedAt"
+                    type="date"
+                    value={game.completedAt?.slice(0, 10) ?? ''}
+                    class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+                  />
+                </div>
+              </div>
+            </fieldset>
+
+            <!-- NOTES -->
+            <fieldset class="border border-[#cfc4b0] bg-[#f4eee1] p-5">
+              <legend class="px-2 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+                Notes
+              </legend>
+
+              <textarea
+                id="notes"
+                name="notes"
+                rows="4"
+                placeholder="Catatan pribadi…"
+                class="w-full resize-y border border-[#c6bcaa] bg-[#faf7ef] px-4 py-3 font-serif text-base leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-red-800"
+              >{game.notes ?? ''}</textarea>
+            </fieldset>
+
+            <!-- IDENTITY (manual/legacy only) -->
+            {
+              identityEditable && (
+                <fieldset class="border border-[#cfc4b0] bg-[#f4eee1] p-5">
+                  <legend class="px-2 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+                    Record Identity
+                  </legend>
+
+                  <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div class="md:col-span-2">
+                      <label for="title" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                        Game Title
+                      </label>
+                      <input
+                        id="title"
+                        name="title"
+                        type="text"
+                        maxlength="200"
+                        value={game.title}
+                        class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-serif text-base text-neutral-900 outline-none focus:border-red-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label for="franchise" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                        Franchise
+                      </label>
+                      <input
+                        id="franchise"
+                        name="franchise"
+                        type="text"
+                        maxlength="120"
+                        value={game.franchise ?? ''}
+                        class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label for="genre" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                        Genre
+                      </label>
+                      <input
+                        id="genre"
+                        name="genre"
+                        type="text"
+                        maxlength="120"
+                        value={game.genre ?? ''}
+                        class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label for="releaseYear" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                        Release Year
+                      </label>
+                      <input
+                        id="releaseYear"
+                        name="releaseYear"
+                        type="number"
+                        min="1950"
+                        max="2100"
+                        step="1"
+                        value={game.releaseYear ?? ''}
+                        class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label for="coverUrl" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                        Cover URL
+                      </label>
+                      <input
+                        id="coverUrl"
+                        name="coverUrl"
+                        type="url"
+                        maxlength="2000"
+                        value={game.coverUrl ?? ''}
+                        class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+              )
+            }
+
+            <div class="flex flex-wrap items-center gap-3 border-t border-dashed border-[#cfc7b8] pt-5">
+              <button
+                type="submit"
+                data-submit
+                class="inline-flex items-center gap-2 border border-[#493831] bg-[#342b27] px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#fff8ed] hover:bg-[#743c34] disabled:opacity-60"
+              >
+                <JournalIcon name="note" size={13} />
+                Save Changes
+              </button>
+
+              <a
+                href={`/library/${game.id}`}
+                class="inline-flex items-center gap-2 border border-[#b9ae9c] px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-700 hover:bg-[#dfd6c6]"
+              >
+                Cancel
+              </a>
+
+              <p data-form-status role="status" aria-live="polite" class="font-mono text-[10px] text-paper-muted"></p>
+            </div>
+          </form>
+        </>
+      )
+    }
+  </article>
+</NotebookLayout>
+
+<script>
+  import { apiRequest, notifyLibraryChanged, type ApiError } from '../../../lib/client/library-api';
+
+  function initialise() {
+    const form = document.querySelector<HTMLFormElement>('[data-edit-game-form]');
+    if (!form || form.dataset.wired === 'true') return;
+    form.dataset.wired = 'true';
+
+    const gameId = form.dataset.gameId;
+    const errorBox = form.querySelector<HTMLElement>('[data-form-error]');
+    const errorText = form.querySelector<HTMLElement>('[data-form-error-text]');
+    const submit = form.querySelector<HTMLButtonElement>('[data-submit]');
+    const status = form.querySelector<HTMLElement>('[data-form-status]');
+
+    // Send empty numeric/date inputs as explicit nulls so a cleared field is
+    // actually cleared rather than silently ignored.
+    const NULLABLE = new Set([
+      'hoursPlayed',
+      'progressPercent',
+      'personalRating',
+      'startedAt',
+      'completedAt',
+      'notes',
+      'franchise',
+      'genre',
+      'releaseYear',
+      'coverUrl',
+    ]);
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      errorBox?.classList.add('hidden');
+      if (status) status.textContent = '';
+
+      const data = new FormData(form);
+      const payload: Record<string, unknown> = {};
+
+      for (const [key, raw] of data.entries()) {
+        const value = String(raw).trim();
+
+        if (key === 'status' || key === 'priority' || key === 'platform') {
+          if (value) payload[key] = value;
+          continue;
+        }
+
+        if (key === 'title') {
+          if (value) payload.title = value;
+          continue;
+        }
+
+        if (NULLABLE.has(key)) {
+          payload[key] = value === '' ? null : key === 'releaseYear' || key === 'progressPercent' || key === 'personalRating'
+            ? Number(value)
+            : key === 'hoursPlayed'
+              ? Number(value)
+              : value;
+        }
+      }
+
+      // Numeric nulls must stay null, not NaN.
+      for (const key of ['releaseYear', 'progressPercent', 'personalRating', 'hoursPlayed']) {
+        if (key in payload && (payload[key] === null || Number.isNaN(payload[key] as number))) {
+          payload[key] = null;
+        }
+      }
+
+      if (!gameId) return;
+
+      if (submit) {
+        submit.disabled = true;
+        if (status) status.textContent = 'Menyimpan…';
+      }
+
+      try {
+        await apiRequest(`/api/library/games/${encodeURIComponent(gameId)}`, {
+          method: 'PATCH',
+          body: payload,
+        });
+
+        notifyLibraryChanged({ gameId });
+        window.location.href = `/library/${gameId}?notice=updated`;
+      } catch (error) {
+        const apiError = error as ApiError;
+        errorBox?.classList.remove('hidden');
+        if (errorText) errorText.textContent = apiError.message || 'Gagal menyimpan perubahan.';
+        if (submit) submit.disabled = false;
+        if (status) status.textContent = '';
+      }
+    });
+  }
+
+  document.addEventListener('astro:page-load', initialise);
+  initialise();
+</script>

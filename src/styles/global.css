@@ -324,3 +324,115 @@
     transform: none;
   }
 }
+
+/* --------------------------------------------------------------------- */
+/* ADD TO BACKLOG                                                        */
+/* Kept global (not scoped to the .astro component) because catalog cards */
+/* are also rebuilt client-side after filtering, and would otherwise lose */
+/* their styles.                                                        */
+/* --------------------------------------------------------------------- */
+
+.catalog-card__action {
+  border-top: 1px dashed #d6cdbb;
+  padding: 0.5rem 0.75rem 0.6rem;
+}
+
+.add-to-backlog {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.add-to-backlog__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+
+  border: 1px solid #493831;
+  background: #342b27;
+  padding: 0.4rem 0.7rem;
+
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+
+  color: #fff8ed;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.add-to-backlog--full .add-to-backlog__button {
+  padding: 0.65rem 1rem;
+  font-size: 10px;
+}
+
+.add-to-backlog__button:hover:not(:disabled) {
+  background: #743c34;
+  border-color: #8e3029;
+}
+
+.add-to-backlog__button:focus-visible {
+  outline: 2px solid #8e3029;
+  outline-offset: 2px;
+}
+
+.add-to-backlog__button:disabled {
+  cursor: default;
+  border-color: #8b7a5f;
+  background: #efe8da;
+  color: #6b6152;
+}
+
+.add-to-backlog__button[data-busy='true'] {
+  opacity: 0.7;
+}
+
+.add-to-backlog__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+
+  color: #78350f;
+  text-decoration: none;
+}
+
+.add-to-backlog__link:hover {
+  text-decoration: underline;
+}
+
+.add-to-backlog__link.hidden {
+  display: none;
+}
+
+.add-to-backlog__feedback {
+  flex-basis: 100%;
+  margin: 0;
+
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.4;
+  color: #844334;
+}
+
+.add-to-backlog__feedback:empty {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .add-to-backlog__button {
+    transition: none;
+  }
+}

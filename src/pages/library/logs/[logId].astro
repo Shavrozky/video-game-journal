@@ -1,0 +1,213 @@
+---
+/**
+ * /library/logs/[logId] — view a database-backed Field Log.
+ *
+ * Published logs render their sanitised Markdown. Drafts are viewable locally
+ * (so the author can resume) but are clearly marked as unpublished.
+ */
+
+import NotebookLayout from '../../../layouts/NotebookLayout.astro';
+import InkStamp from '../../../components/InkStamp.astro';
+import JournalIcon from '../../../components/ui/JournalIcon.astro';
+
+import { ensureDatabase } from '../../../lib/server/http';
+import { getGameById } from '../../../lib/server/library-repository';
+import { getLogById } from '../../../lib/server/field-log-repository';
+import { renderMarkdown, markdownStats } from '../../../lib/server/markdown';
+
+export const prerender = false;
+
+ensureDatabase();
+
+const logId = Astro.params.logId ?? '';
+const log = logId ? getLogById(logId) : null;
+const game = log ? getGameById(log.personalGameId) : null;
+
+if (!log || !game) {
+  Astro.response.status = 404;
+}
+
+const html = log ? renderMarkdown(log.contentMarkdown) : '';
+const stats = log ? markdownStats(log.contentMarkdown) : { words: 0, characters: 0 };
+
+const formatDate = (value: string | null) => {
+  if (!value) return null;
+  const parsed = new Date(value.length === 10 ? `${value}T00:00:00Z` : value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+};
+
+const formatDuration = (minutes: number | null) => {
+  if (minutes === null) return null;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} minutes`;
+  return m === 0 ? `${h} hours` : `${h}h ${m}m`;
+};
+
+const notice = Astro.url.searchParams.get('notice');
+const notices: Record<string, string> = {
+  logcreated: 'Field Log dibuat.',
+  logupdated: 'Field Log tersimpan.',
+  logpublished: 'Field Log diterbitkan.',
+};
+---
+
+<NotebookLayout
+  activeTab="backlog"
+  headTitle={log ? `${log.title} — Field Log` : 'Log Not Found'}
+  kicker="Personal Archive"
+  kickerSuffix="Vol. 01 / Field Log"
+  title="FIELD LOG"
+  subtitle="Catatan sesi pribadi yang tersimpan di arsip lokal."
+  footerLabel="Personal Library // Field Log"
+  pageLabel={log ? `Log ${log.id.slice(0, 8)}` : 'Unresolved'}
+  sideIndexLabel="LIBRARY // LOG"
+>
+  <article class="mx-auto max-w-5xl">
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-dashed border-[#cfc7b8] pb-3 font-mono text-[9px] uppercase tracking-[0.16em] text-paper-muted">
+      <span>DATABASE FIELD LOG // {log?.id.slice(0, 8).toUpperCase() ?? 'UNKNOWN'}</span>
+      <span>{log?.publicationStatus === 'published' ? 'PUBLISHED' : 'DRAFT / UNPUBLISHED'}</span>
+    </div>
+
+    {
+      notice && notices[notice] && (
+        <div class="mb-6 flex items-start gap-3 border border-[#8a9a7a] bg-[#eef2e6] px-4 py-3" role="status">
+          <JournalIcon name="status" size={14} />
+          <p class="font-mono text-[10px] uppercase tracking-wider text-[#3f5d3a]">{notices[notice]}</p>
+        </div>
+      )
+    }
+
+    {
+      !log || !game ? (
+        <section class="space-y-5 border-2 border-[#8e3029] bg-[#f6e9e5] p-7">
+          <h2 class="flex items-center gap-2 font-mono text-sm font-bold uppercase tracking-wider text-[#8e3029]">
+            <JournalIcon name="status" size={16} />
+            Field Log Not Found
+          </h2>
+          <p class="font-serif text-base text-neutral-800">
+            Catatan ini mungkin sudah dihapus. Entri Markdown lama tidak terpengaruh.
+          </p>
+          <a href="/backlog" class="inline-flex items-center gap-2 border border-[#8e3029] px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-[#8e3029] hover:bg-[#8e3029] hover:text-[#fbf7ef]">
+            <JournalIcon name="arrow" size={12} class="rotate-180" />
+            Back to Backlog
+          </a>
+        </section>
+      ) : (
+        <>
+          {
+            log.publicationStatus === 'draft' && (
+              <div class="mb-6 border-2 border-[#b8873a] bg-[#fbf3e2] p-4" role="status">
+                <p class="font-mono text-[10px] font-bold uppercase tracking-wider text-[#8a5a13]">
+                  Draft — belum diterbitkan
+                </p>
+                <p class="mt-1 font-serif text-sm text-neutral-700">
+                  Catatan ini hanya terlihat di perangkatmu dan belum ditandai selesai.
+                </p>
+              </div>
+            )
+          }
+
+          <header class="border-b border-[#ddd5c5] pb-6">
+            <p class="font-mono text-[10px] uppercase tracking-wider text-paper-muted">
+              <a href={`/library/${game.id}`} class="hover:underline">{game.title}</a>
+              {log.sessionDate && ` / ${formatDate(log.sessionDate)}`}
+              {log.durationMinutes !== null && ` / ${formatDuration(log.durationMinutes)}`}
+            </p>
+
+            <h2 class="mt-2 font-serif text-4xl font-bold leading-tight text-neutral-950 md:text-5xl">
+              {log.title}
+            </h2>
+
+            <div class="mt-4 flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-wider">
+              <InkStamp status={log.publicationStatus === 'published' ? 'Published' : 'Draft'} size="sm" tone={log.publicationStatus === 'published' ? 'black' : 'red'} />
+
+              {log.playerCondition && <span class="text-red-800">Kondisi // {log.playerCondition}</span>}
+              {log.mood && <span class="text-paper-muted">Mood // {log.mood}</span>}
+              <span class="text-paper-muted">{stats.words} words</span>
+            </div>
+          </header>
+
+          <div class="mt-8 grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1fr)_240px]">
+            <div
+              class="prose prose-neutral max-w-none font-serif text-[18px] leading-[1.85] prose-headings:font-serif prose-headings:text-neutral-950 prose-p:text-[#34312c] prose-strong:text-neutral-950 prose-blockquote:border-amber-800 prose-blockquote:text-neutral-700"
+              set:html={html}
+            />
+
+            <aside class="space-y-5 xl:sticky xl:top-24 xl:self-start">
+              <section class="border border-[#cfc4b0] bg-[#f1ebdf] p-4">
+                <h3 class="font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+                  Actions
+                </h3>
+
+                <div class="mt-3 space-y-2">
+                  <a
+                    href={`/library/logs/${log.id}/edit`}
+                    class="flex items-center justify-between gap-2 font-mono text-[9px] font-bold uppercase tracking-wider text-amber-900 hover:underline"
+                  >
+                    Edit log
+                    <JournalIcon name="arrow" size={11} />
+                  </a>
+
+                  <a
+                    href={`/library/${game.id}`}
+                    class="flex items-center justify-between gap-2 font-mono text-[9px] font-bold uppercase tracking-wider text-amber-900 hover:underline"
+                  >
+                    Game profile
+                    <JournalIcon name="arrow" size={11} />
+                  </a>
+                </div>
+              </section>
+
+              <section class="border border-dashed border-[#cfc4b0] bg-[#f8f5ee] p-4">
+                <h3 class="font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+                  Record
+                </h3>
+
+                <dl class="mt-3 space-y-1.5 font-mono text-[9px] uppercase tracking-wider">
+                  <div class="flex justify-between gap-2">
+                    <dt class="text-paper-muted">Created</dt>
+                    <dd class="text-neutral-800">{formatDate(log.createdAt)}</dd>
+                  </div>
+                  <div class="flex justify-between gap-2">
+                    <dt class="text-paper-muted">Updated</dt>
+                    <dd class="text-neutral-800">{formatDate(log.updatedAt)}</dd>
+                  </div>
+                  {log.publishedAt && (
+                    <div class="flex justify-between gap-2">
+                      <dt class="text-paper-muted">Published</dt>
+                      <dd class="text-neutral-800">{formatDate(log.publishedAt)}</dd>
+                    </div>
+                  )}
+                </dl>
+              </section>
+            </aside>
+          </div>
+
+          <div class="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-dashed border-[#cfc7b8] pt-5">
+            <a
+              href={`/library/${game.id}`}
+              class="inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase text-amber-900 hover:underline"
+            >
+              <JournalIcon name="arrow" size={13} class="rotate-180" />
+              Kembali ke {game.title}
+            </a>
+
+            <a
+              href="/backlog"
+              class="font-mono text-[9px] font-bold uppercase tracking-wider text-paper-muted hover:underline"
+            >
+              Backlog Shelf
+            </a>
+          </div>
+        </>
+      )
+    }
+  </article>
+</NotebookLayout>

@@ -601,9 +601,62 @@ const rangeEnd = Math.min(initial.page * initial.pageSize, initial.total);
     record.append(document.createTextNode('Record'), iconArrow());
 
     footer.append(el('span', undefined, reviews), record);
-    card.append(link, footer);
+
+    // Same "ADD TO BACKLOG" control the server renders, built here so cards
+    // produced by filtering/pagination are not missing it.
+    const actionBar = el('div', 'catalog-card__action');
+    actionBar.append(buildBacklogControl(game.appId));
+
+    card.append(link, footer, actionBar);
 
     return card;
+  }
+
+  /** Mirrors src/components/AddToBacklogButton.astro (compact variant). */
+  function buildBacklogControl(appId: number): HTMLElement {
+    const root = el('div', 'add-to-backlog');
+    root.dataset.addToBacklogRoot = '';
+    root.dataset.appId = String(appId);
+
+    const button = el('button', 'add-to-backlog__button');
+    button.type = 'button';
+    button.dataset.addToBacklog = '';
+    button.dataset.appId = String(appId);
+    button.dataset.saved = 'false';
+
+    const label = el('span', undefined, 'ADD TO BACKLOG');
+    label.dataset.label = '';
+    button.append(iconBookmark(), label);
+
+    const link = el('a', 'add-to-backlog__link hidden');
+    link.dataset.profileLink = '';
+    link.append(document.createTextNode('Open record'), iconArrow(11));
+
+    const note = el('p', 'add-to-backlog__feedback');
+    note.dataset.feedback = '';
+    note.setAttribute('role', 'status');
+    note.setAttribute('aria-live', 'polite');
+
+    root.append(button, link, note);
+    return root;
+  }
+
+  function iconBookmark(size = 12): SVGSVGElement {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', String(size));
+    svg.setAttribute('height', String(size));
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.8');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M7 3h10v18l-5-3-5 3V3Z');
+    svg.append(path);
+    return svg;
   }
 
   function initialiseCatalog() {

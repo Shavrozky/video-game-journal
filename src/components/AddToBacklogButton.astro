@@ -1,0 +1,204 @@
+---
+/**
+ * "ADD TO BACKLOG" control for a Steam catalog game.
+ *
+ * The saved state is rendered on the server (so the correct label is present
+ * before any JS runs and there is no flash of "ADD TO BACKLOG" for a game that
+ * is already saved). The client script only performs the mutation.
+ *
+ * Only the AppID is sent to the API; the server resolves title/cover/genre from
+ * the local catalog, so a tampered client cannot inject metadata.
+ */
+
+import JournalIcon from './ui/JournalIcon.astro';
+
+import { getGameBySteamAppId } from '../lib/server/library-repository';
+
+interface Props {
+  appId: number;
+  /** `compact` is used inside catalog cards; `full` on the detail page. */
+  variant?: 'compact' | 'full';
+}
+
+const { appId, variant = 'compact' } = Astro.props;
+
+let saved = null;
+try {
+  saved = getGameBySteamAppId(appId);
+} catch {
+  // Database not initialised yet (e.g. during a fresh build): render as unsaved.
+  saved = null;
+}
+
+const isFull = variant === 'full';
+---
+
+<div class:list={['add-to-backlog', isFull && 'add-to-backlog--full']} data-add-to-backlog-root data-app-id={appId}>
+  <button
+    type="button"
+    data-add-to-backlog
+    data-app-id={appId}
+    data-saved={saved ? 'true' : 'false'}
+    aria-label={saved ? `In my library: open ${''}record` : 'Add this game to the personal backlog'}
+    class:list={['add-to-backlog__button', saved && 'add-to-backlog__button--saved']}
+    disabled={!!saved}
+  >
+    <JournalIcon name={saved ? 'bookmark' : 'backlog'} size={12} />
+    <span data-label>{saved ? 'IN MY LIBRARY' : 'ADD TO BACKLOG'}</span>
+  </button>
+
+  <a
+    data-profile-link
+    href={saved ? `/library/${saved.id}` : '#'}
+    class:list={['add-to-backlog__link', !saved && 'hidden']}
+    aria-label="Open the personal library record"
+  >
+    Open record
+    <JournalIcon name="arrow" size={11} />
+  </a>
+
+  <p data-feedback role="status" aria-live="polite" class="add-to-backlog__feedback"></p>
+</div>
+
+
+<script>
+  import { apiRequest, notifyLibraryChanged, type ApiError } from '../lib/client/library-api';
+
+  interface CreatedGame {
+    game: { id: string; title: string };
+  }
+
+  function setSaved(root: HTMLElement, gameId: string | null) {
+    const button = root.querySelector<HTMLButtonElement>('[data-add-to-backlog]');
+    const label = root.querySelector<HTMLElement>('[data-label]');
+    const link = root.querySelector<HTMLAnchorElement>('[data-profile-link]');
+
+    if (!button || !label) return;
+
+    button.dataset.saved = 'true';
+    button.dataset.busy = 'false';
+    button.disabled = true;
+    label.textContent = 'IN MY LIBRARY';
+
+    if (link) {
+      if (gameId) {
+        link.href = `/library/${gameId}`;
+        link.classList.remove('hidden');
+      } else {
+        link.classList.add('hidden');
+      }
+    }
+  }
+
+  function feedback(root: HTMLElement, message: string, tone: 'ok' | 'error' = 'ok') {
+    const node = root.querySelector<HTMLElement>('[data-feedback]');
+    if (!node) return;
+
+    node.textContent = message;
+    node.style.color = tone === 'error' ? '#8e3029' : '#3f5d3a';
+  }
+
+  async function addToBacklog(root: HTMLElement) {
+    const button = root.querySelector<HTMLButtonElement>('[data-add-to-backlog]');
+    const label = root.querySelector<HTMLElement>('[data-label]');
+    const appId = Number(root.dataset.appId);
+
+    if (!button || !label || button.disabled) return;
+    if (!Number.isSafeInteger(appId) || appId <= 0) {
+      feedback(root, 'AppID tidak valid.', 'error');
+      return;
+    }
+
+    const original = label.textContent ?? 'ADD TO BACKLOG';
+
+    button.dataset.busy = 'true';
+    button.disabled = true;
+    label.textContent = 'SAVING…';
+    feedback(root, '');
+
+    try {
+      const result = await apiRequest<CreatedGame>('/api/library/games', {
+        method: 'POST',
+        body: { steamAppId: appId },
+      });
+
+      setSaved(root, result.game?.id ?? null);
+      feedback(root, 'Tersimpan di Personal Library.');
+      notifyLibraryChanged({ appId, gameId: result.game?.id });
+    } catch (error) {
+      const apiError = error as ApiError;
+
+      // Already saved (e.g. added in another tab): reconcile to the saved state.
+      if (apiError.status === 409) {
+        const existing = apiError.body?.game as { id?: string } | undefined;
+        setSaved(root, existing?.id ?? null);
+        feedback(root, 'Game ini sudah ada di library.');
+        return;
+      }
+
+      button.dataset.busy = 'false';
+      button.disabled = false;
+      label.textContent = original;
+      feedback(root, apiError.message || 'Gagal menambahkan game.', 'error');
+    }
+  }
+
+  function initialise() {
+    document.querySelectorAll<HTMLElement>('[data-add-to-backlog-root]').forEach((root) => {
+      if (root.dataset.wired === 'true') return;
+      root.dataset.wired = 'true';
+
+      const button = root.querySelector<HTMLButtonElement>('[data-add-to-backlog]');
+      button?.addEventListener('click', () => void addToBacklog(root));
+    });
+
+    void syncSavedState();
+  }
+
+  /**
+   * Cards produced client-side (after filtering/pagination) start unsaved.
+   * Fetch the saved AppIDs once per page load and reconcile them.
+   */
+  let syncPromise: Promise<void> | null = null;
+
+  function syncSavedState(): Promise<void> {
+    syncPromise ??= (async () => {
+      const roots = [...document.querySelectorAll<HTMLElement>('[data-add-to-backlog-root]')].filter(
+        (root) => root.querySelector('[data-add-to-backlog]')?.getAttribute('data-saved') === 'false',
+      );
+
+      if (roots.length === 0) return;
+
+      try {
+        const data = await apiRequest<{ results: Array<{ id: string; steamAppId: number | null }> }>(
+          '/api/library/games',
+        );
+
+        const saved = new Map<number, string>();
+        for (const game of data.results ?? []) {
+          if (typeof game.steamAppId === 'number') saved.set(game.steamAppId, game.id);
+        }
+
+        for (const root of roots) {
+          const appId = Number(root.dataset.appId);
+          const id = saved.get(appId);
+          if (id) setSaved(root, id);
+        }
+      } catch {
+        // The catalog still browses fine without this; the button just stays
+        // in its unsaved state and the API will answer 409 if clicked.
+      }
+    })();
+
+    return syncPromise;
+  }
+
+  // New cards may appear after a filter/pagination request.
+  document.addEventListener('astro:page-load', () => {
+    syncPromise = null;
+    void syncSavedState();
+  });
+
+  document.addEventListener('astro:page-load', initialise);
+  initialise();
+</script>

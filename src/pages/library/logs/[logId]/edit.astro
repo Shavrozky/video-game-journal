@@ -1,0 +1,93 @@
+---
+/**
+ * /library/logs/[logId]/edit — edit a database-backed Field Log.
+ */
+
+import NotebookLayout from '../../../../layouts/NotebookLayout.astro';
+import FieldLogEditor from '../../../../components/FieldLogEditor.astro';
+import JournalIcon from '../../../../components/ui/JournalIcon.astro';
+
+import { ensureDatabase } from '../../../../lib/server/http';
+import { getGameById } from '../../../../lib/server/library-repository';
+import { getLogById } from '../../../../lib/server/field-log-repository';
+
+export const prerender = false;
+
+ensureDatabase();
+
+const logId = Astro.params.logId ?? '';
+const log = logId ? getLogById(logId) : null;
+const game = log ? getGameById(log.personalGameId) : null;
+
+if (!log || !game) {
+  Astro.response.status = 404;
+}
+---
+
+<NotebookLayout
+  activeTab="backlog"
+  headTitle={log ? `Edit ${log.title} — Field Log` : 'Log Not Found'}
+  kicker="Personal Archive"
+  kickerSuffix="Vol. 01 / Edit Field Log"
+  title="EDIT FIELD LOG"
+  subtitle="Perbarui catatan sesi. Draft dan catatan terbit memakai data yang sama."
+  footerLabel="Personal Library // Field Log Editor"
+  pageLabel="Editor / Edit"
+  sideIndexLabel="LIBRARY // LOG"
+>
+  <article class="mx-auto max-w-6xl space-y-7">
+    <nav aria-label="Breadcrumb" class="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-paper-muted">
+      <a href="/backlog" class="hover:underline">Backlog Shelf</a>
+      <span>/</span>
+      {game && <a href={`/library/${game.id}`} class="hover:underline">{game.title}</a>}
+      <span>/</span>
+      {log && <a href={`/library/logs/${log.id}`} class="hover:underline">Log</a>}
+      <span>/</span>
+      <span class="font-bold text-neutral-900">Edit</span>
+    </nav>
+
+    {
+      !log || !game ? (
+        <section class="space-y-5 border-2 border-[#8e3029] bg-[#f6e9e5] p-7">
+          <h2 class="flex items-center gap-2 font-mono text-sm font-bold uppercase tracking-wider text-[#8e3029]">
+            <JournalIcon name="status" size={16} />
+            Field Log Not Found
+          </h2>
+          <a href="/backlog" class="inline-flex items-center gap-2 border border-[#8e3029] px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-[#8e3029] hover:bg-[#8e3029] hover:text-[#fbf7ef]">
+            <JournalIcon name="arrow" size={12} class="rotate-180" />
+            Back to Backlog
+          </a>
+        </section>
+      ) : (
+        <>
+          <header class="flex flex-wrap items-center justify-between gap-3 border-b border-dashed border-[#cfc7b8] pb-5">
+            <div>
+              <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                Linked Game / {game.title}
+              </p>
+              <h2 class="mt-1 font-serif text-3xl font-bold text-neutral-950">{log.title}</h2>
+            </div>
+
+            <span
+              class:list={[
+                'border px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-wider',
+                log.publicationStatus === 'draft'
+                  ? 'border-[#b8873a] bg-[#fbf3e2] text-[#8a5a13]'
+                  : 'border-[#8a9a7a] bg-[#eef2e6] text-[#3f5d3a]',
+              ]}
+            >
+              {log.publicationStatus}
+            </span>
+          </header>
+
+          <FieldLogEditor
+            mode="edit"
+            game={game}
+            log={log}
+            cancelHref={`/library/logs/${log.id}`}
+          />
+        </>
+      )
+    }
+  </article>
+</NotebookLayout>

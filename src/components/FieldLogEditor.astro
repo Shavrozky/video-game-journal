@@ -1,0 +1,459 @@
+---
+/**
+ * Shared Field Log editor, used by both /library/[id]/logs/new and
+ * /library/logs/[logId]/edit.
+ *
+ * Markdown on the left, live preview on the right; tabs on small screens.
+ * Preview is rendered server-side of first paint is empty and filled by the
+ * client using the same `marked` + `sanitize-html` pipeline the server uses, so
+ * saved and previewed output cannot diverge.
+ */
+
+import JournalIcon from './ui/JournalIcon.astro';
+
+import type { PersonalFieldLog, PersonalGame } from '../data/library/types';
+
+interface Props {
+  mode: 'create' | 'edit';
+  game: PersonalGame;
+  log?: PersonalFieldLog;
+  /** Where Cancel returns to. */
+  cancelHref: string;
+}
+
+const { mode, game, log, cancelHref } = Astro.props;
+
+const isEdit = mode === 'edit' && !!log;
+const actionUrl = isEdit ? `/api/library/logs/${log!.id}` : `/api/library/games/${game.id}/logs`;
+const today = new Date().toISOString().slice(0, 10);
+---
+
+<div
+  data-log-editor
+  data-mode={mode}
+  data-action={actionUrl}
+  data-game-id={game.id}
+  data-log-id={log?.id ?? ''}
+  class="space-y-5"
+>
+  <!-- ERRORS -->
+  <div data-editor-error class="hidden border-2 border-[#8e3029] bg-[#f6e9e5] p-4" role="alert">
+    <p data-editor-error-text class="font-mono text-[10px] font-bold uppercase tracking-wider text-[#8e3029]"></p>
+  </div>
+
+  <!-- META -->
+  <fieldset class="border border-[#cfc4b0] bg-[#f4eee1] p-5">
+    <legend class="px-2 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+      Log Details
+    </legend>
+
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div class="md:col-span-2">
+        <label for="log-title" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+          Journal Title <span class="text-red-800">*</span>
+        </label>
+        <input
+          id="log-title"
+          name="title"
+          type="text"
+          required
+          maxlength="200"
+          value={log?.title ?? ''}
+          placeholder="Sesi pertama — lorong yang tidak berujung"
+          data-log-title
+          class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-serif text-base text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-red-800"
+        />
+      </div>
+
+      <div>
+        <label for="log-session-date" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+          Session Date
+        </label>
+        <input
+          id="log-session-date"
+          name="sessionDate"
+          type="date"
+          value={log?.sessionDate?.slice(0, 10) ?? today}
+          class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+        />
+      </div>
+
+      <div>
+        <label class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+          Session Duration
+        </label>
+        <div class="flex items-center gap-2">
+          <input
+            id="log-hours"
+            name="durationHours"
+            type="number"
+            min="0"
+            max="336"
+            step="1"
+            value={log?.durationMinutes ? Math.floor(log.durationMinutes / 60) : ''}
+            placeholder="0"
+            aria-label="Jam"
+            class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+          />
+          <span class="font-mono text-[9px] uppercase text-paper-muted">h</span>
+          <input
+            id="log-minutes"
+            name="durationMinutes"
+            type="number"
+            min="0"
+            max="59"
+            step="1"
+            value={log?.durationMinutes ? log.durationMinutes % 60 : ''}
+            placeholder="0"
+            aria-label="Menit"
+            class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+          />
+          <span class="font-mono text-[9px] uppercase text-paper-muted">m</span>
+        </div>
+      </div>
+
+      <div>
+        <label for="log-condition" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+          Player Condition
+        </label>
+        <input
+          id="log-condition"
+          name="playerCondition"
+          type="text"
+          maxlength="200"
+          value={log?.playerCondition ?? ''}
+          placeholder="Lelah, fokus, gelisah…"
+          class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-mono text-[11px] text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-red-800"
+        />
+      </div>
+
+      <div>
+        <label for="log-mood" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+          Mood
+        </label>
+        <input
+          id="log-mood"
+          name="mood"
+          type="text"
+          maxlength="200"
+          value={log?.mood ?? ''}
+          placeholder="Sunyi, tegang…"
+          class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-mono text-[11px] text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-red-800"
+        />
+      </div>
+    </div>
+  </fieldset>
+
+  <!-- EDITOR / PREVIEW -->
+  <section class="border border-[#cfc4b0] bg-[#f8f5ee]">
+    <div class="flex items-center gap-2 border-b border-[#d6cdbb] px-4 py-2.5">
+      <JournalIcon name="note" size={13} />
+      <h3 class="font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+        Session Notes
+      </h3>
+
+      <div class="mt-0 ml-auto flex gap-1" role="tablist" aria-label="Editor mode">
+        <button
+          type="button"
+          role="tab"
+          data-tab="edit"
+          aria-selected="true"
+          class="border border-[#c4b9a5] bg-[#39312b] px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-[#fff8ed] lg:hidden"
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          role="tab"
+          data-tab="preview"
+          aria-selected="false"
+          class="border border-[#c4b9a5] bg-[#f1ebde] px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-neutral-700 lg:hidden"
+        >
+          Preview
+        </button>
+      </div>
+
+      <span data-editor-stats class="ml-2 font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+        0 words
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2">
+      <div data-pane="edit" class="border-b border-[#d6cdbb] lg:border-b-0 lg:border-r">
+        <textarea
+          id="log-content"
+          name="contentMarkdown"
+          rows="22"
+          placeholder={'Tulis catatan sesi dalam Markdown…\n\n## Yang terjadi\n\n- Titik awal\n- Atmosfer\n\n> Kutipan atau kesan'}
+          spellcheck="true"
+          data-log-content
+          class="block min-h-[26rem] w-full resize-y border-0 bg-[#fbf9f4] px-4 py-4 font-mono text-[12px] leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-inset focus:ring-red-800/40"
+        >{log?.contentMarkdown ?? ''}</textarea>
+      </div>
+
+      <div data-pane="preview" class="hidden lg:block">
+        <div class="flex items-center gap-2 border-b border-[#d6cdbb] bg-[#f1ebde] px-4 py-2">
+          <span class="font-mono text-[8px] uppercase tracking-widest text-paper-muted">Preview</span>
+        </div>
+
+        <div
+          data-preview-output
+          class="prose prose-neutral min-h-[26rem] max-w-none px-5 py-4 font-serif text-[15px] leading-relaxed prose-headings:font-serif prose-headings:text-neutral-950 prose-p:text-[#34312c] prose-blockquote:border-amber-800"
+        >
+          <p class="font-mono text-[10px] uppercase tracking-wider text-paper-muted">
+            Pratinjau muncul saat kamu mengetik.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACTIONS -->
+  <div class="flex flex-wrap items-center gap-3 border-t border-dashed border-[#cfc7b8] pt-5">
+    <button
+      type="button"
+      data-save-draft
+      class="inline-flex items-center gap-2 border border-[#493831] bg-[#342b27] px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#fff8ed] hover:bg-[#743c34] disabled:opacity-60"
+    >
+      <JournalIcon name="note" size={13} />
+      Save Draft
+    </button>
+
+    <button
+      type="button"
+      data-publish
+      class="inline-flex items-center gap-2 border border-[#8e3029] px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#8e3029] hover:bg-[#8e3029] hover:text-[#fbf7ef] disabled:opacity-60"
+    >
+      <JournalIcon name="bookmark" size={13} />
+      Publish
+    </button>
+
+    {
+      isEdit && (
+        <button
+          type="button"
+          data-delete-log
+          data-log-title={log!.title}
+          class="inline-flex items-center gap-2 border border-[#b9ae9c] px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-600 hover:border-[#8e3029] hover:text-[#8e3029] disabled:opacity-60"
+        >
+          Delete
+        </button>
+      )
+    }
+
+    <a
+      href={cancelHref}
+      class="inline-flex items-center gap-2 border border-[#b9ae9c] px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-700 hover:bg-[#dfd6c6]"
+    >
+      Cancel
+    </a>
+
+    <p data-editor-status role="status" aria-live="polite" class="font-mono text-[10px] text-paper-muted"></p>
+  </div>
+</div>
+
+<script>
+  import { apiRequest, notifyLibraryChanged, type ApiError } from '../lib/client/library-api';
+
+  interface PreviewResponse {
+    html: string;
+  }
+
+  function initialise() {
+    const scope = document.querySelector<HTMLElement>('[data-log-editor]');
+    if (!scope || scope.dataset.wired === 'true') return;
+    scope.dataset.wired = 'true';
+
+    // Bound to a non-null const so closures created below keep the narrowing.
+    const root: HTMLElement = scope;
+
+    const action = root.dataset.action ?? '';
+    const logId = root.dataset.logId ?? '';
+    const gameId = root.dataset.gameId ?? '';
+
+    const title = root.querySelector<HTMLInputElement>('[data-log-title]');
+    const content = root.querySelector<HTMLTextAreaElement>('[data-log-content]');
+    const preview = root.querySelector<HTMLElement>('[data-preview-output]');
+    const stats = root.querySelector<HTMLElement>('[data-editor-stats]');
+    const status = root.querySelector<HTMLElement>('[data-editor-status]');
+    const errorBox = root.querySelector<HTMLElement>('[data-editor-error]');
+    const errorText = root.querySelector<HTMLElement>('[data-editor-error-text]');
+
+    const saveDraft = root.querySelector<HTMLButtonElement>('[data-save-draft]');
+    const publish = root.querySelector<HTMLButtonElement>('[data-publish]');
+    const deleteButton = root.querySelector<HTMLButtonElement>('[data-delete-log]');
+
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>('[data-tab]')];
+    const panes = [...root.querySelectorAll<HTMLElement>('[data-pane]')];
+
+    /* ---------------- tabs (small screens) ---------------- */
+    for (const tab of tabs) {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.tab;
+
+        for (const other of tabs) {
+          const active = other === tab;
+          other.setAttribute('aria-selected', String(active));
+          other.className = active
+            ? 'border border-[#c4b9a5] bg-[#39312b] px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-[#fff8ed] lg:hidden'
+            : 'border border-[#c4b9a5] bg-[#f1ebde] px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-neutral-700 lg:hidden';
+        }
+
+        for (const pane of panes) {
+          pane.classList.toggle('hidden', pane.dataset.pane !== target);
+        }
+      });
+    }
+
+    /* ---------------- live preview ---------------- */
+    let previewTimer: number | undefined;
+    let previewSeq = 0;
+
+    async function refreshPreview() {
+      if (!content || !preview) return;
+
+      const source = content.value;
+      const seq = ++previewSeq;
+
+      if (!source.trim()) {
+        preview.innerHTML =
+          '<p class="font-mono text-[10px] uppercase tracking-wider text-paper-muted">Pratinjau muncul saat kamu mengetik.</p>';
+        return;
+      }
+
+      try {
+        // Server-side render keeps the output identical to the published page.
+        const response = await fetch('/api/library/preview', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ markdown: source }),
+        });
+
+        if (!response.ok) return;
+
+        const data = (await response.json()) as PreviewResponse;
+
+        // Ignore out-of-order responses.
+        if (seq !== previewSeq) return;
+
+        preview.innerHTML = data.html;
+      } catch {
+        /* preview is best-effort */
+      }
+    }
+
+    function updateStats() {
+      if (!content || !stats) return;
+      const words = content.value.trim() ? content.value.trim().split(/\s+/).length : 0;
+      stats.textContent = `${words} words`;
+    }
+
+    content?.addEventListener('input', () => {
+      updateStats();
+      window.clearTimeout(previewTimer);
+      previewTimer = window.setTimeout(() => void refreshPreview(), 250);
+    });
+
+    updateStats();
+
+    /* ---------------- save ---------------- */
+    function showError(message: string) {
+      errorBox?.classList.remove('hidden');
+      if (errorText) errorText.textContent = message;
+    }
+
+    function setBusy(busy: boolean, label: string) {
+      for (const button of [saveDraft, publish, deleteButton]) {
+        if (button) button.disabled = busy;
+      }
+      if (status) status.textContent = busy ? label : '';
+    }
+
+    function collect(publicationStatus: 'draft' | 'published') {
+      const hours = Number(root.querySelector<HTMLInputElement>('[name="durationHours"]')?.value ?? 0) || 0;
+      const minutes = Number(root.querySelector<HTMLInputElement>('[name="durationMinutes"]')?.value ?? 0) || 0;
+      const total = hours * 60 + minutes;
+
+      const payload: Record<string, unknown> = {
+        title: title?.value.trim() ?? '',
+        sessionDate: root.querySelector<HTMLInputElement>('[name="sessionDate"]')?.value || null,
+        durationMinutes: total > 0 ? total : null,
+        playerCondition: root.querySelector<HTMLInputElement>('[name="playerCondition"]')?.value.trim() || null,
+        mood: root.querySelector<HTMLInputElement>('[name="mood"]')?.value.trim() || null,
+        contentMarkdown: content?.value ?? '',
+        publicationStatus,
+      };
+
+      return payload;
+    }
+
+    async function save(publicationStatus: 'draft' | 'published') {
+      errorBox?.classList.add('hidden');
+
+      if (!title?.value.trim()) {
+        showError('Judul catatan wajib diisi.');
+        title?.focus();
+        return;
+      }
+
+      const payload = collect(publicationStatus);
+      setBusy(true, publicationStatus === 'draft' ? 'Menyimpan draft…' : 'Menerbitkan…');
+
+      try {
+        if (logId) {
+          await apiRequest(`/api/library/logs/${encodeURIComponent(logId)}`, {
+            method: 'PATCH',
+            body: payload,
+          });
+          notifyLibraryChanged({ logId, gameId });
+          window.location.href = `/library/logs/${logId}?notice=${publicationStatus === 'draft' ? 'logupdated' : 'logpublished'}`;
+        } else {
+          const result = await apiRequest<{ log: { id: string } }>(action, {
+            method: 'POST',
+            body: payload,
+          });
+          notifyLibraryChanged({ logId: result.log.id, gameId });
+          window.location.href = `/library/logs/${result.log.id}?notice=logcreated`;
+        }
+      } catch (error) {
+        const apiError = error as ApiError;
+        showError(apiError.message || 'Gagal menyimpan catatan.');
+        setBusy(false, '');
+      }
+    }
+
+    saveDraft?.addEventListener('click', () => void save('draft'));
+    publish?.addEventListener('click', () => void save('published'));
+
+    /* ---------------- delete ---------------- */
+    deleteButton?.addEventListener('click', async () => {
+      if (!logId) return;
+
+      const label = deleteButton.dataset.logTitle ?? 'catatan ini';
+      if (!window.confirm(`Hapus Field Log "${label}"?\n\nTindakan ini tidak dapat dibatalkan.`)) return;
+
+      setBusy(true, 'Menghapus…');
+
+      try {
+        await apiRequest(`/api/library/logs/${encodeURIComponent(logId)}`, { method: 'DELETE' });
+        notifyLibraryChanged({ logId, gameId, deleted: true });
+        window.location.href = `/library/${gameId}?notice=logdeleted`;
+      } catch (error) {
+        const apiError = error as ApiError;
+        showError(apiError.message || 'Gagal menghapus catatan.');
+        setBusy(false, '');
+      }
+    });
+
+    // Ctrl/Cmd+S saves the draft without submitting anything.
+    root.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        void save('draft');
+      }
+    });
+  }
+
+  document.addEventListener('astro:page-load', initialise);
+  initialise();
+</script>

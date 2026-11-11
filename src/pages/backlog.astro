@@ -1,56 +1,113 @@
 ---
+/**
+ * Backlog Shelf — the personal library.
+ *
+ * Reads from SQLite (via the repository, not raw SQL). The 16 legacy backlog
+ * entries are seeded into the same table, so this page shows them alongside
+ * Steam-sourced and manual entries with no special-casing.
+ *
+ * Server-rendered on demand: newly added games must appear without a rebuild.
+ */
+
 import { getCollection } from 'astro:content';
 
 import NotebookLayout from '../layouts/NotebookLayout.astro';
 import ArchiveCover from '../components/ArchiveCover.astro';
-import MemoryCardFilter from '../components/ui/MemoryCardFilter.astro';
 import JournalIcon from '../components/ui/JournalIcon.astro';
+import InkStamp from '../components/InkStamp.astro';
 
-import { backlogGames } from '../data/backlog';
+import { ensureDatabase } from '../lib/server/http';
+import { getLibraryFacets, getLibraryStats, listGames } from '../lib/server/library-repository';
+import { GAME_STATUSES, PRIORITIES, isLibraryOrder, isGameStatus, type LibraryOrder } from '../data/library/types';
+import { journalsForGame, journalPath } from '../lib/journal';
+import SavedSteamBacklog from '../components/SavedSteamBacklog.astro';
 
-import {
-  journalsForGame,
-  journalPath,
-} from '../lib/journal';
+export const prerender = false;
 
+ensureDatabase();
+
+const params = Astro.url.searchParams;
+
+const search = params.get('search')?.trim() ?? '';
+const platformFilter = params.get('platform')?.trim() ?? '';
+const statusParam = params.get('status')?.trim() ?? '';
+const priorityParam = params.get('priority')?.trim() ?? '';
+const orderParam = params.get('order');
+
+const statusFilter = isGameStatus(statusParam) ? statusParam : '';
+const priorityFilter = PRIORITIES.includes(priorityParam as (typeof PRIORITIES)[number])
+  ? priorityParam
+  : '';
+const order: LibraryOrder = isLibraryOrder(orderParam) ? orderParam : 'recent';
+
+const games = listGames({
+  search: search || undefined,
+  platform: platformFilter || null,
+  status: statusFilter || null,
+  priority: priorityFilter || null,
+  order,
+});
+
+const stats = getLibraryStats();
+const facets = getLibraryFacets();
 const allLogs = await getCollection('journal');
 
-const games = [...backlogGames].sort(
-  (a, b) => a.registry - b.registry
-);
-
-const totalSlots = Math.max(
-  16,
-  Math.ceil(games.length / 16) * 16
-);
-
+const totalSlots = Math.max(16, Math.ceil(games.length / 16) * 16);
 const emptySlots = Array.from(
-  { length: totalSlots - games.length },
-  (_, index) => games.length + index + 1
+  { length: Math.min(16, totalSlots - games.length) },
+  (_, index) => games.length + index + 1,
 );
 
-const nextCount = games.filter(
-  (game) => game.status === 'Next'
-).length;
+const formatNumber = (value: number) => String(value).padStart(2, '0');
 
-const franchises = [
-  'ALL',
-  'Silent Hill',
-  'Resident Evil',
-  'Indie Horror',
+const isFiltered = !!(search || platformFilter || statusFilter || priorityFilter);
+
+const orderOptions: Array<{ value: LibraryOrder; label: string }> = [
+  { value: 'recent', label: 'Recently Added' },
+  { value: 'title', label: 'Title A → Z' },
+  { value: 'progress', label: 'Progress' },
 ];
 
-const formatNumber = (value: number) =>
-  String(value).padStart(2, '0');
+const flash = params.get('notice');
+
+const notices: Record<string, string> = {
+  added: 'Game ditambahkan ke Personal Library.',
+  updated: 'Perubahan tersimpan.',
+  removed: 'Game dihapus dari Personal Library.',
+  logcreated: 'Field Log dibuat.',
+  logupdated: 'Field Log tersimpan.',
+  logdeleted: 'Field Log dihapus.',
+};
 ---
 
-<NotebookLayout activeTab="backlog">
-
-  <div data-backlog-root class="space-y-8">
+<NotebookLayout
+  activeTab="backlog"
+  headTitle="Personal Library — Video Game Field Journal"
+  kicker="Personal Archive"
+  kickerSuffix="Vol. 01 / Personal Library"
+  title="VIDEO GAME FIELD JOURNAL"
+  subtitle="Catatan perjalanan bermain, observasi atmosfer, pengalaman personal, dan hal-hal aneh yang tersisa setelah layar dimatikan."
+  footerLabel="Personal Library // SQLite-Backed"
+  pageLabel={`Shelf / ${formatNumber(stats.total)}`}
+  sideIndexLabel="LIBRARY // PC"
+>
+  <div data-library-root class="space-y-8">
+    {
+      flash && notices[flash] && (
+        <div
+          class="flex items-start gap-3 border border-[#8a9a7a] bg-[#eef2e6] px-4 py-3"
+          role="status"
+        >
+          <JournalIcon name="status" size={14} />
+          <p class="font-mono text-[10px] uppercase tracking-wider text-[#3f5d3a]">
+            {notices[flash]}
+          </p>
+        </div>
+      )
+    }
 
     <!-- HEADER -->
     <section class="flex flex-col justify-between gap-6 border-b border-dashed border-[#cfc7b8] pb-7 lg:flex-row lg:items-end">
-
       <div>
         <p class="font-mono text-[9px] uppercase tracking-[0.18em] text-paper-muted">
           PERSONAL ARCHIVE / VOLUME 01
@@ -61,168 +118,270 @@ const formatNumber = (value: number) =>
         </h2>
 
         <p class="mt-3 max-w-2xl font-serif text-base leading-relaxed text-neutral-700">
-          Katalog dunia yang belum dijelajahi, perjalanan yang
-          sudah tercatat, dan cerita yang masih menunggu giliran.
+          Katalog dunia yang belum dijelajahi, perjalanan yang sudah tercatat,
+          dan cerita yang masih menunggu giliran. Semua perubahan tersimpan
+          langsung ke arsip lokal.
         </p>
       </div>
 
-      <div class="grid shrink-0 grid-cols-2 border border-[#cfc5b3] bg-[#f0eade]">
-
-        <div class="px-7 py-4 text-center">
-          <div class="font-mono text-2xl font-bold text-neutral-900">
-            {formatNumber(games.length)}
-          </div>
-          <div class="font-mono text-[9px] uppercase text-paper-muted">
-            Registered
-          </div>
+      <div class="grid shrink-0 grid-cols-2 border border-[#cfc5b3] bg-[#f0eade] sm:grid-cols-4">
+        <div class="px-5 py-4 text-center">
+          <div class="font-mono text-2xl font-bold text-neutral-900" data-stat="total">{formatNumber(stats.total)}</div>
+          <div class="font-mono text-[9px] uppercase text-paper-muted">Saved</div>
         </div>
 
-        <div class="border-l border-[#cfc5b3] px-7 py-4 text-center">
-          <div class="font-mono text-2xl font-bold text-red-800">
-            {formatNumber(nextCount)}
-          </div>
-          <div class="font-mono text-[9px] uppercase text-paper-muted">
-            Next
-          </div>
+        <div class="border-l border-[#cfc5b3] px-5 py-4 text-center">
+          <div class="font-mono text-2xl font-bold text-[#2f5147]" data-stat="playing">{formatNumber(stats.playing)}</div>
+          <div class="font-mono text-[9px] uppercase text-paper-muted">Playing</div>
         </div>
 
+        <div class="border-l border-[#cfc5b3] px-5 py-4 text-center">
+          <div class="font-mono text-2xl font-bold text-[#3f5d3a]" data-stat="cleared">{formatNumber(stats.cleared)}</div>
+          <div class="font-mono text-[9px] uppercase text-paper-muted">Cleared</div>
+        </div>
+
+        <div class="border-l border-[#cfc5b3] px-5 py-4 text-center">
+          <div class="font-mono text-2xl font-bold text-red-800" data-stat="backlog">{formatNumber(stats.backlog)}</div>
+          <div class="font-mono text-[9px] uppercase text-paper-muted">Backlog</div>
+        </div>
       </div>
     </section>
 
-    <!-- FILTER -->
+    <!-- CONTROLS -->
     <section class="space-y-5">
-
-      <div class="flex items-center gap-2 border-b border-[#d8d0c0] pb-2">
+      <div class="flex flex-wrap items-center gap-2 border-b border-[#d8d0c0] pb-2">
         <JournalIcon name="archive" size={14} />
 
         <h3 class="font-mono text-[11px] font-bold uppercase tracking-wider text-neutral-900">
           Archive Controls
         </h3>
+
+        <div class="ml-auto flex flex-wrap items-center gap-2">
+          <a
+            href="/library/new"
+            class="inline-flex items-center gap-1.5 border border-[#493831] bg-[#342b27] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#fff8ed] hover:bg-[#743c34]"
+          >
+            <JournalIcon name="note" size={11} />
+            Add Manual Game
+          </a>
+
+          <a
+            href="/catalog"
+            class="inline-flex items-center gap-1.5 border border-[#c4b9a5] bg-[#f1ebde] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-neutral-700 hover:bg-[#dfd6c6]"
+          >
+            <JournalIcon name="catalog" size={11} />
+            Browse Steam Catalog
+          </a>
+        </div>
       </div>
 
-      <div class="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
-
-        <div class="space-y-2">
-          <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">
-            Select Platform / Memory Card
-          </p>
-
-          <MemoryCardFilter />
-        </div>
-
-        <div class="w-full max-w-sm">
-          <label
-            for="backlog-search"
-            class="mb-2 block font-mono text-[9px] uppercase tracking-wider text-paper-muted"
-          >
-            Search Archive
+      <form
+        method="get"
+        action="/backlog"
+        data-library-filters
+        class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))]"
+        role="search"
+      >
+        <div>
+          <label for="library-search" class="mb-2 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+            Search Title
           </label>
-
           <input
-            id="backlog-search"
-            data-backlog-search
+            id="library-search"
+            name="search"
             type="search"
-            placeholder="Cari judul, genre, atau catatan..."
+            value={search}
+            placeholder="Cari judul…"
             autocomplete="off"
+            data-library-search
             class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-3 font-mono text-[11px] text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-red-800"
           />
         </div>
-      </div>
 
-      <!-- FRANCHISE FILTER -->
-      <div class="flex flex-wrap items-center gap-2">
+        <div>
+          <label for="library-platform" class="mb-2 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+            Platform
+          </label>
+          <select
+            id="library-platform"
+            name="platform"
+            data-library-platform
+            class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-3 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+          >
+            <option value="">All platforms</option>
+            {
+              facets.platforms.map((platform) => (
+                <option value={platform} selected={platformFilter === platform}>
+                  {platform}
+                </option>
+              ))
+            }
+          </select>
+        </div>
 
-        <span class="mr-2 font-mono text-[9px] uppercase text-paper-muted">
-          Series
-        </span>
+        <div>
+          <label for="library-status" class="mb-2 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+            Status
+          </label>
+          <select
+            id="library-status"
+            name="status"
+            data-library-status
+            class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-3 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+          >
+            <option value="">All statuses</option>
+            {
+              GAME_STATUSES.map((status) => (
+                <option value={status} selected={statusFilter === status}>
+                  {status}
+                </option>
+              ))
+            }
+          </select>
+        </div>
 
-        {
-          franchises.map((franchise) => (
+        <div>
+          <label for="library-priority" class="mb-2 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+            Priority
+          </label>
+          <select
+            id="library-priority"
+            name="priority"
+            data-library-priority
+            class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-3 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+          >
+            <option value="">All priorities</option>
+            {
+              PRIORITIES.map((priority) => (
+                <option value={priority} selected={priorityFilter === priority}>
+                  {priority}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+
+        <div>
+          <label for="library-order" class="mb-2 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+            Sort
+          </label>
+          <select
+            id="library-order"
+            name="order"
+            data-library-order
+            class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-3 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+          >
+            {
+              orderOptions.map((option) => (
+                <option value={option.value} selected={order === option.value}>
+                  {option.label}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+
+        <noscript>
+          <div class="md:col-span-2 xl:col-span-5">
             <button
-              type="button"
-              data-franchise-filter={franchise}
-              aria-pressed={franchise === 'ALL' ? 'true' : 'false'}
-              class="franchise-filter border border-[#c4b9a5] bg-[#f1ebde] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-neutral-700 transition-colors hover:bg-[#dfd6c6]"
+              type="submit"
+              class="border border-[#8e3029] bg-[#39312b] px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#fbf7ef]"
             >
-              {franchise === 'ALL'
-                ? 'ALL SERIES'
-                : franchise}
+              Apply Filters
             </button>
-          ))
-        }
+          </div>
+        </noscript>
+      </form>
 
-      </div>
+      <p class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+        {games.length} / {stats.total} shown
+        {
+          isFiltered && (
+            <>
+              <span class="mx-2 text-[#c4b9a5]">|</span>
+              <a href="/backlog" class="text-amber-900 hover:underline">Clear filters</a>
+            </>
+          )
+        }
+      </p>
     </section>
 
     <!-- REGISTRY -->
     <section class="space-y-4">
-
       <div class="flex flex-wrap items-center justify-between gap-3 border-b-2 border-[#bdb4a5] pb-3">
-
         <div class="flex items-center gap-2">
           <JournalIcon name="backlog" size={16} />
-
           <h3 class="font-mono text-xs font-bold uppercase tracking-wider text-neutral-900">
             Game Registry
           </h3>
         </div>
 
-        <span
-          data-backlog-count
-          aria-live="polite"
-          class="font-mono text-[10px] text-paper-muted"
-        >
-          {games.length} / {games.length} Entries
+        <span class="font-mono text-[10px] text-paper-muted" data-library-count aria-live="polite">
+          {games.length} / {stats.total} Entries
         </span>
       </div>
 
-      <div
-        data-backlog-grid
-        class="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-4"
-      >
+      {
+        games.length === 0 && (
+          <div class="border border-dashed border-[#c5b7a1] bg-[#f6f0e4] px-6 py-10 text-center" role="status">
+            <p class="font-mono text-xs font-bold uppercase text-neutral-800">
+              {isFiltered ? 'No Matching Records' : 'Library Is Empty'}
+            </p>
+            <p class="mt-2 font-serif text-base text-neutral-600">
+              {isFiltered
+                ? 'Belum ada game yang cocok dengan filter ini.'
+                : 'Tambahkan game dari katalog Steam atau buat catatan manual.'}
+            </p>
+            <div class="mt-4 flex flex-wrap justify-center gap-2">
+              <a href="/catalog" class="border border-[#8b7660] bg-[#39312b] px-4 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#fbf7ef] hover:bg-[#8e3029]">
+                Browse Catalog
+              </a>
+              <a href="/library/new" class="border border-[#b9ae9c] px-4 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-neutral-700 hover:bg-[#dfd6c6]">
+                Add Manual Game
+              </a>
+            </div>
+          </div>
+        )
+      }
 
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-4">
         {
           games.map((game) => {
-            const related = journalsForGame(
-              allLogs,
-              game.id
-            );
+            const related = game.legacyGameId ? journalsForGame(allLogs, game.legacyGameId) : [];
+            const displayIndex = game.registry ?? null;
 
             return (
               <article
                 id={`game-${game.id}`}
-                data-backlog-card
+                data-library-card
+                data-game-id={game.id}
                 data-platform={game.platform.toUpperCase()}
-                data-franchise={game.franchise}
-                data-search={`${game.title} ${game.genre} ${game.reason} ${game.franchise}`.toLowerCase()}
-                class="scroll-mt-26 flex min-h-[240px] min-w-0 flex-col border border-[#c9c0b0] bg-[#f3ede2] p-4 transition-all hover:border-[#8b7660] hover:shadow-lg"
+                data-status={game.status}
+                data-priority={game.priority}
+                class="scroll-mt-26 flex min-h-[260px] min-w-0 flex-col border border-[#c9c0b0] bg-[#f3ede2] p-4 transition-all hover:border-[#8b7660] hover:shadow-lg"
               >
-
                 <div class="mb-3 flex items-center justify-between border-b border-dashed border-[#d6cdbb] pb-2">
-
-                  <span class="font-mono text-[9px] uppercase text-paper-muted">
-                    Registry Entry
+                  <span class="font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+                    {game.source === 'legacy' ? 'Registry Entry' : game.source === 'steam' ? 'Steam Import' : 'Manual Entry'}
                   </span>
 
                   <strong class="font-mono text-lg text-[#8b8070]">
-                    {formatNumber(game.registry)}
+                    {displayIndex !== null ? formatNumber(displayIndex) : '—'}
                   </strong>
-
                 </div>
 
                 <div class="flex flex-1 gap-3">
-
                   <ArchiveCover
                     title={game.title}
-                    cover={game.cover}
+                    cover={game.coverUrl ?? undefined}
                     platform={game.platform}
                     class="w-24 shrink-0 rotate-[-1deg] border-4 border-white shadow-md"
                   />
 
                   <div class="flex min-w-0 flex-1 flex-col">
-
                     <p class="font-mono text-[9px] uppercase tracking-wide text-paper-muted">
-                      {game.platform} / {game.year}
+                      {game.platform}
+                      {game.releaseYear ? ` / ${game.releaseYear}` : ''}
                     </p>
 
                     <h4 class="mt-1 font-serif text-xl font-bold leading-tight text-neutral-950">
@@ -230,334 +389,127 @@ const formatNumber = (value: number) =>
                     </h4>
 
                     <p class="mt-1 font-mono text-[8px] uppercase text-paper-muted">
-                      {game.franchise}
+                      {game.franchise ?? game.genre ?? (game.steamAppId ? `App ${game.steamAppId}` : 'Unfiled')}
                     </p>
 
-                    <p class="mt-2 line-clamp-3 font-serif text-sm leading-relaxed text-neutral-600">
-                      {game.reason}
-                    </p>
+                    {
+                      game.notes && (
+                        <p class="mt-2 line-clamp-3 font-serif text-sm leading-relaxed text-neutral-600">
+                          {game.notes}
+                        </p>
+                      )
+                    }
+
+                    {(game.hoursPlayed !== null || game.progressPercent !== null) && (
+                      <div class="mt-2 flex flex-wrap items-center gap-2 font-mono text-[8px] uppercase tracking-wider text-paper-muted">
+                        {game.hoursPlayed !== null && <span>{game.hoursPlayed}h</span>}
+                        {game.progressPercent !== null && <span>{game.progressPercent}%</span>}
+                      </div>
+                    )}
 
                     <div class="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3">
-
-                      <span
-                        class:list={[
-                          'border px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-wider',
-                          game.status === 'Next'
-                            ? 'border-red-800 bg-red-900/10 text-red-900'
-                            : 'border-[#b9ae9c] text-neutral-600',
-                        ]}
-                      >
-                        {game.status}
-                      </span>
-
-                      <span class="font-mono text-[9px] uppercase text-paper-muted">
-                        {game.priority}
-                      </span>
-
+                      <InkStamp status={game.status} size="sm" tone={game.status === 'Next' ? 'red' : 'black'} />
+                      <span class="font-mono text-[9px] uppercase text-paper-muted">{game.priority}</span>
                     </div>
-
                   </div>
                 </div>
 
-                <!-- LINKED JOURNALS -->
-                <div class="mt-3 border-t border-[#d6cdbb] pt-3">
+                <!-- ACTIONS -->
+                <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-[#d6cdbb] pt-3">
+                  <a
+                    href={game.legacyGameId ? `/games/${game.legacyGameId}` : `/library/${game.id}`}
+                    class="inline-flex items-center gap-1 font-mono text-[9px] font-bold uppercase tracking-wider text-amber-900 hover:underline"
+                  >
+                    Open Profile
+                    <JournalIcon name="arrow" size={11} />
+                  </a>
+
+                  <a
+                    href={`/library/${game.id}/edit`}
+                    class="inline-flex items-center gap-1 font-mono text-[9px] font-bold uppercase tracking-wider text-neutral-600 hover:underline"
+                  >
+                    Edit
+                  </a>
 
                   {
-                    related.length > 0 ? (
-                      <div class="space-y-2">
-
-                        {related.map((entry) => (
-                          <a
-                            href={journalPath(entry)}
-                            class="flex items-center gap-2 font-mono text-[9px] font-bold uppercase text-amber-900 hover:underline"
-                          >
-                            <JournalIcon name="logs" size={12} />
-
-                            {entry.data.entryType === 'session'
-                              ? 'Baca Field Log'
-                              : 'Baca Catatan Kurasi'}
-
-                            <JournalIcon name="arrow" size={11} />
-                          </a>
-                        ))}
-
-                      </div>
-                    ) : (
-                      <span class="font-mono text-[9px] uppercase text-paper-muted">
-                        Belum ada catatan
-                      </span>
+                    related.length > 0 && (
+                      <a
+                        href={journalPath(related[0])}
+                        class="inline-flex items-center gap-1 font-mono text-[9px] font-bold uppercase tracking-wider text-amber-900 hover:underline"
+                      >
+                        Catatan
+                        <JournalIcon name="logs" size={11} />
+                      </a>
                     )
                   }
-
-                  <div class="mt-2.5 border-t border-dashed border-[#d6cdbb] pt-2">
-                    <a
-                      href={`/games/${game.id}`}
-                      class="inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-wider text-amber-900 hover:underline"
-                    >
-                      Buka Game Profile
-                      <JournalIcon name="arrow" size={12} />
-                    </a>
-                  </div>
-
                 </div>
               </article>
             );
           })
         }
 
-        <!-- EMPTY SLOTS -->
+        <!-- EMPTY SLOTS (only when unfiltered, to keep the notebook feel) -->
         {
-          emptySlots.map((slot) => (
-            <div
-              data-blank-slot
-              class="hidden min-h-[240px] flex-col items-center justify-center border border-dashed border-[#d2c9b9] bg-[#f8f5ee]/60 p-5 text-center md:flex"
-            >
-              <span class="font-mono text-2xl font-bold text-[#c6bdae]">
-                {formatNumber(slot)}
-              </span>
-
-              <div class="mt-3 h-px w-12 bg-[#d9d1c4]"></div>
-
-              <span class="mt-3 font-mono text-[9px] uppercase tracking-widest text-[#a69c8d]">
-                Empty Slot
-              </span>
-            </div>
-          ))
+          !isFiltered &&
+            emptySlots.map((slot) => (
+              <div class="hidden min-h-[260px] flex-col items-center justify-center border border-dashed border-[#d2c9b9] bg-[#f8f5ee]/60 p-5 text-center md:flex">
+                <span class="font-mono text-2xl font-bold text-[#c6bdae]">{formatNumber(slot)}</span>
+                <div class="mt-3 h-px w-12 bg-[#d9d1c4]"></div>
+                <span class="mt-3 font-mono text-[9px] uppercase tracking-widest text-[#a69c8d]">Empty Slot</span>
+              </div>
+            ))
         }
-
-      </div>
-
-      <div
-        data-backlog-no-results
-        class="hidden border border-dashed border-[#c5b7a1] bg-[#f6f0e4] px-6 py-10 text-center"
-        role="status"
-      >
-        <p class="font-mono text-xs font-bold uppercase text-neutral-800">
-          No Matching Records
-        </p>
-
-        <p class="mt-2 font-serif text-base text-neutral-600">
-          Belum ada game yang cocok dengan filter ini.
-        </p>
       </div>
     </section>
 
     <!-- NOTES -->
     <section class="border-t border-dashed border-[#cfc7b8] pt-8">
-
       <div class="max-w-3xl border border-[#cfc4af] bg-[#f4eee1] p-5">
-
         <h3 class="flex items-center gap-2 font-mono text-[10px] font-bold uppercase text-neutral-900">
           <JournalIcon name="note" size={13} />
           Archive Notes
         </h3>
 
         <p class="mt-3 font-serif text-base leading-relaxed text-neutral-700">
-          Field Log adalah pengalaman bermain pribadi yang sudah ditulis.
-          Catatan Kurasi merupakan pengantar untuk eksplorasi berikutnya.
-          Nomor registry tidak berubah ketika game difilter.
+          Backlog Shelf adalah koleksi pribadi yang dapat diedit. Katalog Steam
+          tetap menjadi sumber metadata global yang read-only. Menghapus game di
+          sini tidak menghapus entri katalog, dan tidak pernah menghapus file
+          Markdown jurnal.
         </p>
 
+        <p class="mt-3 font-mono text-[9px] uppercase leading-relaxed tracking-wider text-paper-muted">
+          {stats.total} game tersimpan · {stats.fieldLogs} Field Log
+          ({stats.drafts} draft) · Penyimpanan: SQLite lokal
+        </p>
       </div>
     </section>
-
   </div>
-
 </NotebookLayout>
 
-<style>
-  .franchise-filter[aria-pressed="true"] {
-    background: #3d342d;
-    color: #fff8ec;
-    border-color: #8e3029;
-  }
-</style>
-
 <script>
-  function initializeBacklog() {
-    const root = document.querySelector<HTMLElement>(
-      '[data-backlog-root]'
-    );
+  /**
+   * Filters submit on change so the server re-renders with the new query.
+   * Search is debounced. Each control is wired once per root.
+   */
+  function initialiseLibrary() {
+    const form = document.querySelector<HTMLFormElement>('[data-library-filters]');
+    if (!form || form.dataset.wired === 'true') return;
+    form.dataset.wired = 'true';
 
-    if (!root || root.dataset.ready === 'true') return;
+    const search = form.querySelector<HTMLInputElement>('[data-library-search]');
 
-    root.dataset.ready = 'true';
-
-    const cards = Array.from(
-      root.querySelectorAll<HTMLElement>(
-        '[data-backlog-card]'
-      )
-    );
-
-    const blankSlots = Array.from(
-      root.querySelectorAll<HTMLElement>(
-        '[data-blank-slot]'
-      )
-    );
-
-    const platformButtons = Array.from(
-      root.querySelectorAll<HTMLButtonElement>(
-        '[data-platform-filter]'
-      )
-    );
-
-    const franchiseButtons = Array.from(
-      root.querySelectorAll<HTMLButtonElement>(
-        '[data-franchise-filter]'
-      )
-    );
-
-    const search = root.querySelector<HTMLInputElement>(
-      '[data-backlog-search]'
-    );
-
-    const counter = root.querySelector<HTMLElement>(
-      '[data-backlog-count]'
-    );
-
-    const noResults = root.querySelector<HTMLElement>(
-      '[data-backlog-no-results]'
-    );
-
-    let platform = 'ALL';
-
-    const allowedFranchises = [
-      'Silent Hill',
-      'Resident Evil',
-      'Indie Horror',
-    ];
-
-    const initialFranchise = new URLSearchParams(
-      window.location.search
-    ).get('franchise');
-
-    let franchise =
-      initialFranchise &&
-      allowedFranchises.includes(initialFranchise)
-        ? initialFranchise
-        : 'ALL';
-
-    function render() {
-      const keyword = (
-        search?.value ?? ''
-      ).trim().toLowerCase();
-
-      let visibleCount = 0;
-
-      cards.forEach((card) => {
-        const matchesPlatform =
-          platform === 'ALL' ||
-          card.dataset.platform === platform;
-
-        const matchesFranchise =
-          franchise === 'ALL' ||
-          card.dataset.franchise === franchise;
-
-        const matchesKeyword =
-          !keyword ||
-          (card.dataset.search ?? '').includes(keyword);
-
-        const visible =
-          matchesPlatform &&
-          matchesFranchise &&
-          matchesKeyword;
-
-        card.classList.toggle('hidden', !visible);
-
-        if (visible) visibleCount++;
-      });
-
-      const defaultView =
-        platform === 'ALL' &&
-        franchise === 'ALL' &&
-        keyword === '';
-
-      blankSlots.forEach((slot) => {
-        slot.style.display = defaultView ? '' : 'none';
-      });
-
-      if (counter) {
-        counter.textContent =
-          `${visibleCount} / ${cards.length} Entries`;
-      }
-
-      noResults?.classList.toggle(
-        'hidden',
-        visibleCount !== 0
-      );
-
-      platformButtons.forEach((button) => {
-        button.setAttribute(
-          'aria-pressed',
-          String(
-            button.dataset.platformFilter === platform
-          )
-        );
-      });
-
-      franchiseButtons.forEach((button) => {
-        button.setAttribute(
-          'aria-pressed',
-          String(
-            button.dataset.franchiseFilter === franchise
-          )
-        );
-      });
+    for (const select of form.querySelectorAll<HTMLSelectElement>('select')) {
+      select.addEventListener('change', () => form.requestSubmit());
     }
 
-    platformButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        platform = button.dataset.platformFilter ?? 'ALL';
-        render();
-      });
+    let timer: number | undefined;
+
+    search?.addEventListener('input', () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => form.requestSubmit(), 300);
     });
-
-    franchiseButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        franchise =
-          button.dataset.franchiseFilter ?? 'ALL';
-
-        const url = new URL(window.location.href);
-
-        if (franchise === 'ALL') {
-          url.searchParams.delete('franchise');
-        } else {
-          url.searchParams.set('franchise', franchise);
-        }
-
-        history.replaceState(
-          history.state,
-          '',
-          `${url.pathname}${url.search}${url.hash}`
-        );
-
-        render();
-      });
-    });
-
-    search?.addEventListener('input', render);
-
-    render();
-
-    // Pastikan tautan #game-id tetap bekerja
-    // setelah halaman dirender lewat ClientRouter.
-    const hash = window.location.hash.slice(1);
-
-    if (hash) {
-      requestAnimationFrame(() => {
-        document.getElementById(
-          decodeURIComponent(hash)
-        )?.scrollIntoView({
-          block: 'start',
-        });
-      });
-    }
   }
 
-  document.addEventListener(
-    'astro:page-load',
-    initializeBacklog
-  );
-
-  initializeBacklog();
+  document.addEventListener('astro:page-load', initialiseLibrary);
+  initialiseLibrary();
 </script>

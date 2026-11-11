@@ -1,0 +1,398 @@
+---
+/**
+ * /library/new — manual game entry.
+ *
+ * For games absent from the 10% Steam sample (Silent Hill, SIGNALIS, …).
+ * Posts to /api/library/games with no `steamAppId`, so the record is stored with
+ * `source = 'manual'` and a null Steam AppID.
+ *
+ * Duplicate titles are warned about client-side (PUT probe) before saving, but
+ * never merged automatically — alternate editions and platforms are legitimate.
+ */
+
+import NotebookLayout from '../../layouts/NotebookLayout.astro';
+import JournalIcon from '../../components/ui/JournalIcon.astro';
+
+import { ensureDatabase } from '../../lib/server/http';
+import { GAME_STATUSES, PLATFORMS, PRIORITIES } from '../../data/library/types';
+
+export const prerender = false;
+
+ensureDatabase();
+
+const back = Astro.url.searchParams.get('from') === 'catalog' ? '/catalog' : '/backlog';
+
+const today = new Date().toISOString().slice(0, 10);
+void today;
+---
+
+<NotebookLayout
+  activeTab="backlog"
+  headTitle="New Archive Record — Video Game Field Journal"
+  kicker="Personal Archive"
+  kickerSuffix="Vol. 01 / New Record"
+  title="NEW ARCHIVE RECORD"
+  subtitle="Menambahkan game yang tidak tersedia di katalog Steam. Catatan ini tersimpan sebagai entri manual, tanpa Steam AppID."
+  footerLabel="Personal Library // Manual Entry"
+  pageLabel="Form / New"
+  sideIndexLabel="LIBRARY // NEW"
+>
+  <article class="mx-auto max-w-4xl space-y-8">
+    <nav aria-label="Breadcrumb" class="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-paper-muted">
+      <a href="/backlog" class="hover:underline">Backlog Shelf</a>
+      <span>/</span>
+      <span class="font-bold text-neutral-900">New Record</span>
+    </nav>
+
+    <header class="border-b border-dashed border-[#cfc7b8] pb-6">
+      <h2 class="font-serif text-4xl font-bold text-neutral-950">Add a Manual Record</h2>
+      <p class="mt-3 max-w-2xl font-serif text-base leading-relaxed text-neutral-700">
+        Gunakan formulir ini untuk game yang tidak ada di sampel dataset Steam.
+        Hanya judul dan platform yang wajib; field lain boleh dikosongkan dan
+        akan disimpan sebagai null — tidak ada data yang dikarang.
+      </p>
+    </header>
+
+    <form
+      data-manual-game-form
+      class="space-y-6"
+      novalidate
+    >
+      <!-- DUPLICATE WARNING -->
+      <div
+        data-duplicate-warning
+        class="hidden border border-[#b8873a] bg-[#fbf3e2] p-4"
+        role="alert"
+      >
+        <h3 class="flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-wider text-[#8a5a13]">
+          <JournalIcon name="status" size={13} />
+          Kemungkinan Duplikat
+        </h3>
+        <p class="mt-2 font-serif text-sm leading-relaxed text-neutral-700">
+          Judul serupa sudah ada di library. Entri tidak digabung otomatis —
+          lanjutkan hanya jika ini edisi atau platform yang berbeda.
+        </p>
+        <ul data-duplicate-list class="mt-3 space-y-1 font-mono text-[10px] text-neutral-700"></ul>
+      </div>
+
+      <!-- ERRORS -->
+      <div
+        data-form-error
+        class="hidden border-2 border-[#8e3029] bg-[#f6e9e5] p-4"
+        role="alert"
+      >
+        <p class="font-mono text-[10px] font-bold uppercase tracking-wider text-[#8e3029]" data-form-error-text></p>
+      </div>
+
+      <!-- IDENTITY -->
+      <fieldset class="border border-[#cfc4b0] bg-[#f4eee1] p-5">
+        <legend class="px-2 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+          Record Identity
+        </legend>
+
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div class="md:col-span-2">
+            <label for="title" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+              Game Title <span class="text-red-800">*</span>
+            </label>
+            <input
+              id="title"
+              name="title"
+              type="text"
+              required
+              maxlength="200"
+              autocomplete="off"
+              placeholder="SIGNALIS"
+              data-title-input
+              class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-serif text-base text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-red-800"
+            />
+            <p class="mt-1 font-mono text-[8px] uppercase tracking-wider text-paper-muted">
+              Wajib. Nama persis seperti yang ingin kamu arsipkan.
+            </p>
+          </div>
+
+          <div>
+            <label for="platform" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+              Platform <span class="text-red-800">*</span>
+            </label>
+            <input
+              id="platform"
+              name="platform"
+              type="text"
+              required
+              list="platform-options"
+              maxlength="40"
+              placeholder="PC"
+              class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+            />
+            <datalist id="platform-options">
+              {PLATFORMS.map((platform) => <option value={platform} />)}
+            </datalist>
+          </div>
+
+          <div>
+            <label for="releaseYear" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+              Release Year
+            </label>
+            <input
+              id="releaseYear"
+              name="releaseYear"
+              type="number"
+              min="1950"
+              max="2100"
+              step="1"
+              placeholder="2022"
+              class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+            />
+          </div>
+
+          <div>
+            <label for="franchise" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+              Franchise / Series
+            </label>
+            <input
+              id="franchise"
+              name="franchise"
+              type="text"
+              maxlength="120"
+              placeholder="Indie Horror"
+              class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+            />
+          </div>
+
+          <div>
+            <label for="genre" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+              Genre
+            </label>
+            <input
+              id="genre"
+              name="genre"
+              type="text"
+              maxlength="120"
+              placeholder="Survival Horror"
+              class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+            />
+          </div>
+
+          <div class="md:col-span-2">
+            <label for="coverUrl" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+              Cover URL
+            </label>
+            <input
+              id="coverUrl"
+              name="coverUrl"
+              type="url"
+              maxlength="2000"
+              placeholder="https://…"
+              class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-4 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+            />
+            <p class="mt-1 font-mono text-[8px] uppercase tracking-wider text-paper-muted">
+              Opsional. Harus http atau https. Jika kosong, sampul digambar otomatis.
+            </p>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- LIBRARY STATE -->
+      <fieldset class="border border-[#cfc4b0] bg-[#f4eee1] p-5">
+        <legend class="px-2 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+          Library State
+        </legend>
+
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label for="status" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+              Personal Status <span class="text-red-800">*</span>
+            </label>
+            <select
+              id="status"
+              name="status"
+              required
+              class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+            >
+              {GAME_STATUSES.map((status) => (
+                <option value={status} selected={status === 'Queued'}>{status}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label for="priority" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+              Priority
+            </label>
+            <select
+              id="priority"
+              name="priority"
+              class="w-full border border-[#c6bcaa] bg-[#faf7ef] px-3 py-2.5 font-mono text-[11px] text-neutral-900 outline-none focus:border-red-800"
+            >
+              {PRIORITIES.map((priority) => (
+                <option value={priority} selected={priority === 'Medium'}>{priority}</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="md:col-span-2">
+            <label for="notes" class="mb-1.5 block font-mono text-[9px] uppercase tracking-wider text-paper-muted">
+              Personal Notes
+            </label>
+            <textarea
+              id="notes"
+              name="notes"
+              rows="4"
+              placeholder="Kenapa game ini masuk daftar?"
+              class="w-full resize-y border border-[#c6bcaa] bg-[#faf7ef] px-4 py-3 font-serif text-base leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-red-800"
+            ></textarea>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- ACTIONS -->
+      <div class="flex flex-wrap items-center gap-3 border-t border-dashed border-[#cfc7b8] pt-5">
+        <button
+          type="submit"
+          data-submit
+          class="inline-flex items-center gap-2 border border-[#493831] bg-[#342b27] px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-[#fff8ed] hover:bg-[#743c34] disabled:opacity-60"
+        >
+          <JournalIcon name="note" size={13} />
+          Save Record
+        </button>
+
+        <a
+          href={back}
+          class="inline-flex items-center gap-2 border border-[#b9ae9c] px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-700 hover:bg-[#dfd6c6]"
+        >
+          Cancel
+        </a>
+
+        <p data-form-status role="status" aria-live="polite" class="font-mono text-[10px] text-paper-muted"></p>
+      </div>
+    </form>
+  </article>
+</NotebookLayout>
+
+<script>
+  import { apiRequest, notifyLibraryChanged, type ApiError } from '../../lib/client/library-api';
+
+  function initialise() {
+    const form = document.querySelector<HTMLFormElement>('[data-manual-game-form]');
+    if (!form || form.dataset.wired === 'true') return;
+    form.dataset.wired = 'true';
+
+    const titleInput = form.querySelector<HTMLInputElement>('[data-title-input]');
+    const warning = form.querySelector<HTMLElement>('[data-duplicate-warning]');
+    const warningList = form.querySelector<HTMLElement>('[data-duplicate-list]');
+    const errorBox = form.querySelector<HTMLElement>('[data-form-error]');
+    const errorText = form.querySelector<HTMLElement>('[data-form-error-text]');
+    const submit = form.querySelector<HTMLButtonElement>('[data-submit]');
+    const status = form.querySelector<HTMLElement>('[data-form-status]');
+
+    let checkTimer: number | undefined;
+
+    function hideMessages() {
+      errorBox?.classList.add('hidden');
+      status && (status.textContent = '');
+    }
+
+    function showError(message: string) {
+      errorBox?.classList.remove('hidden');
+      if (errorText) errorText.textContent = message;
+    }
+
+    // Duplicate probe — advisory only.
+    titleInput?.addEventListener('input', () => {
+      window.clearTimeout(checkTimer);
+      const title = titleInput.value.trim();
+
+      if (title.length < 3) {
+        warning?.classList.add('hidden');
+        return;
+      }
+
+      checkTimer = window.setTimeout(async () => {
+        try {
+          const result = await apiRequest<{
+            matches: Array<{ id: string; title: string; platform: string; source: string }>;
+          }>('/api/library/games', { method: 'PUT', body: { title } });
+
+          const matches = result.matches ?? [];
+
+          if (matches.length === 0) {
+            warning?.classList.add('hidden');
+            return;
+          }
+
+          warning?.classList.remove('hidden');
+          if (warningList) {
+            warningList.replaceChildren(
+              ...matches.slice(0, 5).map((match) => {
+                const li = document.createElement('li');
+                const link = document.createElement('a');
+                link.href = `/library/${match.id}`;
+                link.className = 'underline hover:text-red-900';
+                link.textContent = `${match.title} (${match.platform})`;
+                li.append(link);
+                return li;
+              }),
+            );
+          }
+        } catch {
+          // Silent: this is only a helpful warning.
+        }
+      }, 350);
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      hideMessages();
+
+      const data = new FormData(form);
+      const title = String(data.get('title') ?? '').trim();
+      const platform = String(data.get('platform') ?? '').trim();
+
+      if (!title) {
+        showError('Judul game wajib diisi.');
+        titleInput?.focus();
+        return;
+      }
+
+      if (!platform) {
+        showError('Platform wajib diisi.');
+        form.querySelector<HTMLInputElement>('#platform')?.focus();
+        return;
+      }
+
+      const payload: Record<string, unknown> = { title, platform };
+
+      for (const key of ['franchise', 'genre', 'coverUrl', 'notes', 'priority', 'status']) {
+        const value = String(data.get(key) ?? '').trim();
+        if (value) payload[key] = value;
+      }
+
+      const year = String(data.get('releaseYear') ?? '').trim();
+      if (year) payload.releaseYear = Number(year);
+
+      if (submit) {
+        submit.disabled = true;
+        if (status) status.textContent = 'Menyimpan…';
+      }
+
+      try {
+        const result = await apiRequest<{ game: { id: string; title: string } }>('/api/library/games', {
+          method: 'POST',
+          body: payload,
+        });
+
+        notifyLibraryChanged({ gameId: result.game?.id });
+        window.location.href = `/library/${result.game.id}?notice=added`;
+      } catch (error) {
+        const apiError = error as ApiError;
+        showError(apiError.message || 'Gagal menyimpan catatan.');
+        if (submit) submit.disabled = false;
+        if (status) status.textContent = '';
+      }
+    });
+  }
+
+  document.addEventListener('astro:page-load', initialise);
+  initialise();
+</script>

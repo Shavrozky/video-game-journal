@@ -1,0 +1,205 @@
+<section
+  data-steam-backlog
+  class="mt-10 space-y-4 border-t border-dashed border-[#cfc7b8] pt-8"
+>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p class="font-mono text-[9px] uppercase tracking-widest text-paper-muted">
+        Personal Collection / Steam Records
+      </p>
+
+      <h2 class="mt-2 font-serif text-2xl font-bold text-neutral-900">
+        Saved from Steam Catalog
+      </h2>
+    </div>
+
+    <span
+      data-saved-count
+      class="font-mono text-[10px] text-paper-muted"
+    >
+      Loading...
+    </span>
+  </div>
+
+  <p
+    data-saved-status
+    role="status"
+    class="font-mono text-[11px] text-paper-muted"
+  >
+    Membaca Personal Library...
+  </p>
+
+  <div
+    data-saved-list
+    class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+  ></div>
+</section>
+
+<script>
+  interface SavedGame {
+    id: string;
+    steamAppId: number;
+    title: string;
+    coverUrl: string | null;
+    platform: string;
+    status: string;
+  }
+
+  async function loadSavedSteamGames() {
+    const root = document.querySelector<HTMLElement>(
+      '[data-steam-backlog]'
+    );
+
+    if (!root) return;
+
+    const list = root.querySelector<HTMLElement>(
+      '[data-saved-list]'
+    );
+
+    const status = root.querySelector<HTMLElement>(
+      '[data-saved-status]'
+    );
+
+    const count = root.querySelector<HTMLElement>(
+      '[data-saved-count]'
+    );
+
+    if (!list || !status || !count) return;
+
+    try {
+      const response = await fetch(
+        '/api/library/games',
+        { cache: 'no-store' }
+      );
+
+      if (!response.ok) {
+        throw new Error('Gagal membaca Personal Library.');
+      }
+
+      const data = await response.json() as {
+        results: SavedGame[];
+      };
+
+      list.replaceChildren();
+
+      count.textContent =
+        `${data.results.length} Saved Games`;
+
+      if (data.results.length === 0) {
+        status.textContent =
+          'Belum ada game yang ditambahkan dari Steam Catalog.';
+        return;
+      }
+
+      status.textContent = '';
+
+      for (const game of data.results) {
+        const card = document.createElement('article');
+
+        card.className =
+          'flex gap-4 border border-[#c9c0b0] bg-[#f3ede2] p-4';
+
+        // Cover artwork.
+        const artwork = document.createElement('div');
+
+        artwork.className =
+          'flex h-28 w-20 shrink-0 items-center justify-center overflow-hidden border-4 border-white bg-[#34312e] shadow-sm';
+
+        const fallback = document.createElement('span');
+
+        fallback.className =
+          'p-2 text-center font-serif text-xs text-white';
+
+        fallback.textContent = game.title;
+
+        artwork.append(fallback);
+
+        if (game.coverUrl) {
+          const image = document.createElement('img');
+
+          image.src = game.coverUrl;
+          image.alt = game.title;
+          image.loading = 'lazy';
+          image.className =
+            'h-full w-full object-cover';
+
+          image.onload = () => {
+            if (image.isConnected) {
+              fallback.remove();
+            }
+          };
+
+          image.onerror = () => {
+            image.remove();
+          };
+
+          artwork.append(image);
+        }
+
+        // Game information.
+        const content = document.createElement('div');
+
+        content.className =
+          'flex min-w-0 flex-1 flex-col';
+
+        const label = document.createElement('p');
+
+        label.className =
+          'font-mono text-[9px] uppercase tracking-wider text-paper-muted';
+
+        label.textContent =
+          `STEAM APPID / ${game.steamAppId}`;
+
+        const title = document.createElement('h3');
+
+        title.className =
+          'mt-1 font-serif text-lg font-bold leading-tight text-neutral-900';
+
+        title.textContent = game.title;
+
+        const statusBadge = document.createElement('span');
+
+        statusBadge.className =
+          'mt-3 w-fit border border-[#b9ae9c] px-2 py-1 font-mono text-[9px] font-bold uppercase text-neutral-700';
+
+        statusBadge.textContent = game.status;
+
+        const link = document.createElement('a');
+
+        link.href = `/catalog/${game.steamAppId}`;
+
+        link.className =
+          'mt-auto pt-3 font-mono text-[10px] font-bold uppercase text-amber-900 hover:underline';
+
+        link.textContent = 'VIEW GAME RECORD';
+
+        content.append(
+          label,
+          title,
+          statusBadge,
+          link
+        );
+
+        card.append(artwork, content);
+        list.append(card);
+      }
+    } catch (error) {
+      status.textContent =
+        error instanceof Error
+          ? error.message
+          : 'Gagal membaca koleksi.';
+    }
+  }
+
+  document.addEventListener(
+    'astro:page-load',
+    () => void loadSavedSteamGames()
+  );
+
+  window.addEventListener(
+    'library:changed',
+    () => void loadSavedSteamGames()
+  );
+
+  void loadSavedSteamGames();
+</script>
