@@ -1529,7 +1529,6 @@ function csrfCookie(token, secure) {
 		`${CSRF_COOKIE}=${encodeURIComponent(token)}`,
 		"Path=/",
 		"SameSite=Strict",
-		"HttpOnly=false",
 		secure ? "Secure" : "",
 		"Max-Age=86400"
 	].filter(Boolean).join("; ");

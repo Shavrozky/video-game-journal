@@ -1,399 +1,295 @@
+
 ---
 import { getCollection } from 'astro:content';
 
 import NotebookLayout from '../layouts/NotebookLayout.astro';
-import MiniBoxArt from '../components/MiniBoxArt.astro';
 import ArchiveCover from '../components/ArchiveCover.astro';
-import StickyNote from '../components/StickyNote.astro';
-import InkStamp from '../components/InkStamp.astro';
 import JournalIcon from '../components/ui/JournalIcon.astro';
 
 import {
-  backlogGames,
-  backlogPreview,
-} from '../data/backlog';
-
-import {
   gameForEntry,
-  journalsForGame,
   journalPath,
   sortJournals,
-  franchisePath,
 } from '../lib/journal';
 
 const allLogs = sortJournals(
   await getCollection('journal')
 );
 
-const sessionLogs = allLogs.filter(
-  (entry) => entry.data.entryType === 'session'
-);
+const featuredLog =
+  allLogs.find(
+    (entry) => entry.data.entryType === 'session'
+  ) ??
+  allLogs[0] ??
+  null;
 
-const archiveNotes = allLogs.filter(
-  (entry) => entry.data.entryType === 'overview'
-);
+const featuredGame = featuredLog
+  ? gameForEntry(featuredLog)
+  : null;
 
-const franchises = [
-  'Silent Hill',
-  'Resident Evil',
-];
+const featuredCover = '/images.jpg';
+
+const featuredExcerpt = featuredLog
+  ? featuredLog.data.excerpt ??
+    `Sebuah catatan tentang ${featuredLog.data.game} dan pengalaman yang tertinggal setelah bermain.`
+  : '';
 ---
 
-<NotebookLayout activeTab="logs">
+<NotebookLayout
+  activeTab="logs"
+  headTitle="Field Journal — Personal Archive"
+  kicker="Personal Archive"
+  kickerSuffix="Vol. 01 / Home"
+  title="FIELD JOURNAL"
+  subtitle="Catatan pengalaman bermain dan cerita yang ingin disimpan."
+  footerLabel="Personal Archive // Home"
+  pageLabel="Home / 001"
+  sideIndexLabel="JOURNAL // 01"
+>
+  <main class="mx-auto w-full max-w-5xl pb-6">
 
-  <div class="grid grid-cols-1 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <!-- HERO -->
+    <header class="pb-8 pt-1 sm:pb-9 md:pt-3">
 
-    <!-- MAIN COLUMN -->
-    <div class="min-w-0 space-y-10">
+      <p
+        class="mb-3 flex items-center gap-3 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#8e3029]"
+      >
+        <span class="h-px w-7 bg-[#8e3029]"></span>
+        A Personal Video Game Archive
+      </p>
 
-      <!-- PERSONAL FIELD LOGS -->
-      <section class="space-y-4">
+      <p
+        class="max-w-3xl font-serif text-[clamp(2.5rem,5vw,4rem)] font-bold leading-[1.08] tracking-tight text-[#302820]"
+      >
+        Every game
+        <span class="font-normal italic text-[#8e3029]">
+          leaves a story.
+        </span>
+      </p>
 
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#ded7c8] pb-3">
-          <h2 class="flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-wider text-neutral-800">
-            <JournalIcon name="logs" size={14} />
-            Field Logs / Pengalaman Bermain
+      <p
+        class="mt-4 max-w-2xl font-serif text-base leading-relaxed text-[#706457] md:text-lg"
+      >
+        Tempat menyimpan kesan, cerita, dan kenangan
+        dari game yang pernah dimainkan.
+        Tidak semuanya harus ditamatkan untuk bisa dikenang.
+      </p>
+
+    </header>
+
+    <!-- LATEST FIELD NOTE -->
+    <section
+      aria-labelledby="featured-heading"
+      class="border-t border-[#cfc5b4] py-8 md:py-9"
+    >
+
+      <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+
+        <div>
+          <p
+            class="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#8e3029]"
+          >
+            01 / The Journal
+          </p>
+
+          <h2
+            id="featured-heading"
+            class="font-serif text-2xl font-bold text-[#302820] md:text-3xl"
+          >
+            Latest Field Note
           </h2>
-
-          <span class="font-mono text-[10px] text-paper-muted">
-            {sessionLogs.length} Catatan Sesi
-          </span>
         </div>
 
-        {
-          sessionLogs.length === 0 && (
-            <div class="border border-dashed border-[#cfc5b3] p-6 font-serif text-neutral-600">
-              Belum ada catatan sesi pribadi.
+        <span
+          class="font-mono text-[10px] uppercase tracking-wider text-[#897b69]"
+        >
+          Featured Entry
+        </span>
+
+      </div>
+
+      {
+        featuredLog ? (
+          <a
+            href={journalPath(featuredLog)}
+            class="group grid overflow-hidden border border-[#d2c5b3] bg-[#f4ede0] transition-colors duration-200 hover:border-[#8e3029] sm:grid-cols-[205px_minmax(0,1fr)]"
+          >
+
+            <!-- ARTWORK -->
+            <div
+              class="flex items-center justify-center border-b border-[#d2c5b3] bg-[#e9dfcf] px-6 py-7 sm:border-b-0 sm:border-r"
+            >
+              <ArchiveCover
+                title={featuredLog.data.game}
+                cover={featuredCover}
+                platform={featuredLog.data.platform}
+                class="w-full max-w-[165px] -rotate-2 border-[5px] border-white shadow-lg transition-transform duration-200 group-hover:rotate-0"
+              />
             </div>
-          )
-        }
 
-        {
-          sessionLogs.map((log) => {
-            const game = gameForEntry(log);
+            <!-- JOURNAL DETAIL -->
+            <div
+              class="flex min-w-0 flex-col justify-center p-6 sm:p-7 md:p-8"
+            >
 
-            return (
-              <article class="border border-[#d6cebc] bg-[#f4eee1] p-5 transition-all hover:border-neutral-800 hover:shadow-md">
-
-                <div class="mb-3 flex justify-between gap-3 border-b border-dashed border-[#d5cdbd] pb-2 font-mono text-[9px] uppercase tracking-wider text-paper-muted">
-                  <span>SESSION LOG // {log.id.toUpperCase()}</span>
-                  <span>PERSONAL RECORD</span>
-                </div>
-
-                <div class="flex flex-col gap-5 sm:flex-row sm:items-start">
-
-                  {
-                    log.data.boxArtUrl ? (
-                      <MiniBoxArt
-                        title={log.data.game}
-                        imageUrl={log.data.boxArtUrl}
-                        platform={log.data.platform}
-                        rotation="rotate-[-1deg]"
-                      />
-                    ) : (
-                      <ArchiveCover
-                        title={log.data.game}
-                        cover={game?.cover}
-                        platform={log.data.platform}
-                        class="w-28 shrink-0"
-                      />
-                    )
-                  }
-
-                  <div class="min-w-0 flex-1">
-
-                    <div class="flex flex-wrap justify-between gap-2 font-mono text-[10px]">
-
-                      <span class="bg-stone-300 px-2 py-1 font-bold uppercase text-stone-900">
-                        {log.data.sessionTime}
-                      </span>
-
-                      <span class="text-red-900">
-                        KONDISI // {log.data.playerCondition}
-                      </span>
-
-                    </div>
-
-                    <h3 class="mt-3 font-serif text-2xl font-bold leading-snug text-neutral-950">
-                      <a href={journalPath(log)} class="hover:underline">
-                        {log.data.title}
-                      </a>
-                    </h3>
-
-                    <p class="mt-3 font-serif text-base leading-relaxed text-neutral-700">
-                      {log.data.excerpt ??
-                        `Catatan pengalaman bermain ${log.data.game} dan atmosfer yang tertinggal setelah sesi berakhir.`}
-                    </p>
-
-                    <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#e2dbcd] pt-4">
-
-                      <InkStamp
-                        status={log.data.status}
-                        size="sm"
-                        tone="red"
-                      />
-
-                      <div class="flex flex-wrap items-center gap-4 font-mono text-[10px] font-bold uppercase text-amber-900">
-
-                        {
-                          game && (
-                            <a
-                              href={`${franchisePath(game.franchise)}#game-${game.id}`}
-                              class="hover:underline"
-                            >
-                              Lihat di Registry
-                            </a>
-                          )
-                        }
-
-                        <a
-                          href={journalPath(log)}
-                          class="inline-flex items-center gap-1 hover:underline"
-                        >
-                          Buka Field Log
-                          <JournalIcon name="arrow" size={12} />
-                        </a>
-
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            );
-          })
-        }
-
-      </section>
-
-      <!-- CURATED ARTICLES -->
-      <section class="space-y-4">
-
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#ded7c8] pb-3">
-
-          <h2 class="flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-wider text-neutral-800">
-            <JournalIcon name="archive" size={14} />
-            Catatan Kurasi / Sebelum Bermain
-          </h2>
-
-          <span class="font-mono text-[10px] text-paper-muted">
-            {archiveNotes.length} Arsip Awal
-          </span>
-        </div>
-
-        <p class="max-w-3xl font-serif text-sm leading-relaxed text-paper-muted">
-          Catatan pengantar tentang dunia game, desain, atmosfer,
-          dan hal menarik yang ingin diamati. Bagian ini belum
-          dianggap sebagai pengalaman bermain pribadi.
-        </p>
-
-        <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-
-          {
-            archiveNotes.map((log) => {
-              const game = gameForEntry(log);
-
-              return (
-                <article class="flex flex-col border border-[#d6cebc] bg-[#f5efe3] p-4 transition-colors hover:border-[#927659]">
-
-                  <div class="mb-3 flex justify-between gap-2 font-mono text-[9px] uppercase tracking-wider text-paper-muted">
-                    <span>ARCHIVE NOTE</span>
-                    <span>{log.data.platform}</span>
-                  </div>
-
-                  <div class="flex gap-4">
-
-                    <ArchiveCover
-                      title={log.data.game}
-                      cover={log.data.boxArtUrl ?? game?.cover}
-                      platform={log.data.platform}
-                      class="w-20 shrink-0 border-4 border-white shadow-md"
-                    />
-
-                    <div class="min-w-0 flex-1">
-
-                      <p class="font-mono text-[9px] uppercase tracking-wider text-red-800">
-                        {game?.franchise ?? 'Game Archive'}
-                      </p>
-
-                      <h3 class="mt-1 font-serif text-xl font-bold leading-snug text-neutral-900">
-                        <a href={journalPath(log)} class="hover:underline">
-                          {log.data.title}
-                        </a>
-                      </h3>
-
-                      <p class="mt-2 line-clamp-3 font-serif text-sm leading-relaxed text-neutral-600">
-                        {log.data.excerpt ??
-                          'Catatan pengantar yang menunggu pengalaman bermain pribadi.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div class="mt-auto flex justify-end border-t border-[#e2dbcd] pt-3 mt-4">
-                    <a
-                      href={journalPath(log)}
-                      class="inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase text-amber-900 hover:underline"
-                    >
-                      Baca Catatan
-                      <JournalIcon name="arrow" size={12} />
-                    </a>
-                  </div>
-
-                </article>
-              );
-            })
-          }
-        </div>
-      </section>
-
-      <!-- FRANCHISE ARCHIVE -->
-      <section class="space-y-6">
-
-        <div class="flex items-center gap-3 border-b border-[#ded7c8] pb-3">
-          <JournalIcon name="backlog" size={14} />
-          <h2 class="font-mono text-xs font-bold uppercase tracking-wider text-neutral-800">
-            Franchise Archive
-          </h2>
-        </div>
-
-        {
-          franchises.map((franchise) => {
-            const games = backlogGames.filter(
-              (game) => game.franchise === franchise
-            );
-
-            return (
-              <div class="space-y-4">
-
-                <div class="flex flex-wrap items-center justify-between gap-3">
-
-                  <h3 class="font-serif text-2xl font-bold text-neutral-900">
-                    {franchise}
-                  </h3>
-
-                  <a
-                    href={franchisePath(franchise)}
-                    class="inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase text-amber-900 hover:underline"
-                  >
-                    Buka Indeks ({games.length})
-                    <JournalIcon name="arrow" size={12} />
-                  </a>
-
-                </div>
-
-                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-
-                  {
-                    games.map((game) => {
-                      const linked = journalsForGame(
-                        allLogs,
-                        game.id
-                      );
-
-                      const destination = `/games/${game.id}`;
-
-                      return (
-                        <a
-                          href={destination}
-                          class="group block min-w-0 border border-[#d0c7b7] bg-[#f5efe4] p-2 transition-all hover:-translate-y-1 hover:shadow-md"
-                        >
-                          <ArchiveCover
-                            title={game.title}
-                            cover={game.cover}
-                            platform={game.platform}
-                          />
-
-                          <p class="mt-2 line-clamp-2 min-h-9 font-serif text-sm font-bold text-neutral-900">
-                            {game.title}
-                          </p>
-
-                          <span class="font-mono text-[9px] uppercase text-paper-muted">
-                            {linked.length
-                              ? 'CATATAN TERSEDIA'
-                              : 'DI REGISTRY'}
-                          </span>
-                        </a>
-                      );
-                    })
-                  }
-
-                </div>
-              </div>
-            );
-          })
-        }
-
-      </section>
-
-      <StickyNote>
-        Jurnal ini adalah jejak rasa penasaran, bukan daftar game
-        yang wajib ditamatkan. Setiap permainan bisa memiliki
-        beberapa catatan dan pengalaman yang berbeda.
-      </StickyNote>
-
-    </div>
-
-    <!-- RIGHT SIDEBAR -->
-    <aside class="space-y-6 xl:sticky xl:top-24">
-
-      <section class="border-2 border-[#d5cdbd] bg-[#f2ece0] p-4 shadow-inner">
-
-        <div class="mb-4 flex items-center justify-between gap-2 border-b border-[#cfc5b3] pb-3">
-
-          <div class="flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-wider text-neutral-900">
-            <JournalIcon name="backlog" size={13} />
-            Backlog Shelf
-          </div>
-
-          <a href="/backlog" class="inline-flex items-center gap-1 font-mono text-[9px] text-amber-900 hover:underline">
-            Lihat Semua
-            <JournalIcon name="arrow" size={11} />
-          </a>
-        </div>
-
-        <p class="mb-4 font-mono text-[11px] text-paper-muted">
-          Judul dalam antrean eksplorasi berikutnya:
-        </p>
-
-        <div class="grid grid-cols-2 gap-3">
-
-          {
-            backlogPreview.map((game) => (
-              <a
-                href={`${franchisePath(game.franchise)}#game-${game.id}`}
-                class="group border border-[#ccc3b0] bg-white p-1.5 text-center transition-transform hover:-translate-y-1"
+              <p
+                class="font-mono text-[10px] font-bold uppercase tracking-[0.13em] text-[#8e3029]"
               >
-                <ArchiveCover
-                  title={game.title}
-                  cover={game.cover}
-                  platform={game.platform}
-                  class="w-full"
-                />
+                {
+                  featuredLog.data.entryType === 'session'
+                    ? 'Session Journal'
+                    : 'Archive Note'
+                }
 
-                <p class="mt-1 truncate font-mono text-[10px] font-bold text-neutral-800">
-                  {game.title}
-                </p>
-              </a>
-            ))
-          }
+                <span class="mx-2 text-[#b5a796]">/</span>
 
-        </div>
-      </section>
+                {featuredLog.data.game}
+              </p>
 
-      <section class="border border-dashed border-[#b8b09f] bg-[#f8f5ee] p-4">
+              <h3
+                class="mt-3 max-w-2xl font-serif text-[clamp(1.65rem,3vw,2.35rem)] font-bold leading-[1.15] text-[#302820] group-hover:text-[#8e3029]"
+              >
+                {featuredLog.data.title}
+              </h3>
 
-        <h3 class="flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-wider text-neutral-900">
-          <JournalIcon name="note" size={13} />
-          Parameter Jurnal
-        </h3>
+              <p
+                class="mt-4 line-clamp-3 max-w-xl font-serif text-base leading-relaxed text-[#6f6356]"
+              >
+                {featuredExcerpt}
+              </p>
 
-        <p class="mt-2 font-mono text-[11px] leading-relaxed text-paper-muted">
-          Field Logs berisi pengalaman pribadi. Catatan Kurasi
-          adalah pengantar dan bahan observasi sebelum bermain.
-          Keduanya menggunakan registry game yang sama.
+              <span
+                class="mt-6 inline-flex items-center gap-2 self-start border-b border-[#8e3029] pb-1 font-mono text-[10px] font-bold uppercase tracking-[0.13em] text-[#8e3029]"
+              >
+                Read Field Note
+                <JournalIcon name="arrow" size={13} />
+              </span>
+
+            </div>
+          </a>
+        ) : (
+          <div
+            class="border border-dashed border-[#cfc5b4] bg-[#f8f4ec] px-6 py-10"
+          >
+            <p class="font-serif text-lg text-[#706457]">
+              Belum ada catatan.
+              Cerita pertama akan muncul di sini.
+            </p>
+          </div>
+        )
+      }
+
+    </section>
+
+    <!-- COLLECTION NAVIGATION -->
+    <section
+      aria-labelledby="explore-heading"
+      class="border-t border-[#cfc5b4] py-8 md:py-9"
+    >
+
+      <div class="mb-5">
+
+        <p
+          class="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#8e3029]"
+        >
+          02 / The Collection
         </p>
-      </section>
 
-    </aside>
-  </div>
+        <h2
+          id="explore-heading"
+          class="font-serif text-2xl font-bold text-[#302820] md:text-3xl"
+        >
+          Explore the Archive
+        </h2>
 
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-2">
+
+        <!-- MY BACKLOG -->
+        <a
+          href="/backlog"
+          class="group flex items-center gap-4 border border-[#d2c5b3] bg-[#f5efe4] p-5 transition-colors hover:border-[#8e3029] hover:bg-[#eee4d5]"
+        >
+
+          <span
+            class="flex h-11 w-11 shrink-0 items-center justify-center border border-[#d0c0ac] text-[#8e3029]"
+          >
+            <JournalIcon name="backlog" size={19} />
+          </span>
+
+          <span class="min-w-0 flex-1">
+
+            <span
+              class="block font-serif text-xl font-bold text-[#302820]"
+            >
+              My Backlog
+            </span>
+
+            <span
+              class="mt-1 block font-serif text-sm text-[#72675a]"
+            >
+              Koleksi dan progres bermain
+            </span>
+
+          </span>
+
+          <JournalIcon
+            name="arrow"
+            size={15}
+            class="shrink-0 text-[#8e3029] transition-transform group-hover:translate-x-1"
+          />
+
+        </a>
+
+        <!-- GAME CATALOG -->
+        <a
+          href="/catalog"
+          class="group flex items-center gap-4 border border-[#d2c5b3] bg-[#f5efe4] p-5 transition-colors hover:border-[#8e3029] hover:bg-[#eee4d5]"
+        >
+
+          <span
+            class="flex h-11 w-11 shrink-0 items-center justify-center border border-[#d0c0ac] text-[#8e3029]"
+          >
+            <JournalIcon name="catalog" size={19} />
+          </span>
+
+          <span class="min-w-0 flex-1">
+
+            <span
+              class="block font-serif text-xl font-bold text-[#302820]"
+            >
+              Game Catalog
+            </span>
+
+            <span
+              class="mt-1 block font-serif text-sm text-[#72675a]"
+            >
+              Cari permainan berikutnya
+            </span>
+
+          </span>
+
+          <JournalIcon
+            name="arrow"
+            size={15}
+            class="shrink-0 text-[#8e3029] transition-transform group-hover:translate-x-1"
+          />
+
+        </a>
+
+      </div>
+
+    </section>
+
+    <!-- CLOSING -->
+    <footer
+      class="border-t border-dashed border-[#cfc5b4] pt-5 text-center"
+    >
+      <p class="font-serif text-sm italic text-[#807363]">
+        Not every game needs to be finished to be remembered.
+      </p>
+    </footer>
+
+  </main>
 </NotebookLayout>

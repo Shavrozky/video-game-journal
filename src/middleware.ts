@@ -34,26 +34,22 @@ export const onRequest = defineMiddleware(async (context, next) => {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
 
-  // Issue a CSRF token when the browser does not have one yet. A page that only
-  // reads never needs it, but issuing it here keeps forms working on first visit
-  // without an extra round-trip.
+  // Issue or refresh the CSRF token on GET requests so client scripts can echo
+  // it back on mutations. Re-issuing on GET ensures existing sessions with the
+  // previous stale HttpOnly cookie get overwritten with a script-readable cookie.
   //
   // Skipped on prerendered pages: there is no live request there, and touching
   // `Astro.request.headers` during prerendering only produces a build warning.
   const isPrerendered = context.isPrerendered;
 
-  if (!isPrerendered) {
-    const hasToken = context.cookies.get(CSRF_COOKIE)?.value;
+  if (!isPrerendered && context.request.method === 'GET') {
+    const existingToken = context.cookies.get(CSRF_COOKIE)?.value;
+    const token = existingToken || newCsrfToken();
 
-    if (!hasToken && context.request.method === 'GET') {
-      // Appended manually rather than via `cookies.set()`: that helper defaults
-      // to HttpOnly, which would make the double-submit token unreadable by the
-      // page script and break every mutation. One header, HttpOnly=false.
-      response.headers.append(
-        'Set-Cookie',
-        csrfCookie(newCsrfToken(), context.url.protocol === 'https:'),
-      );
-    }
+    response.headers.append(
+      'Set-Cookie',
+      csrfCookie(token, context.url.protocol === 'https:'),
+    );
   }
 
   return response;

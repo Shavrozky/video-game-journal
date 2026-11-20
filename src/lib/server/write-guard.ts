@@ -187,7 +187,7 @@ export function csrfCookie(token: string, secure: boolean): string {
     `${CSRF_COOKIE}=${encodeURIComponent(token)}`,
     'Path=/',
     'SameSite=Strict',
-    'HttpOnly=false', // must be readable by the page script for the double-submit
+    // Do NOT include HttpOnly: client JS (document.cookie) must be able to read this token for double-submit CSRF.
     secure ? 'Secure' : '',
     'Max-Age=86400',
   ].filter(Boolean);
