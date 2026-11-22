@@ -3,6 +3,8 @@ title: "Silent Hill 3 — Identitas dan Ketakutan terhadap Diri Sendiri"
 game: "Silent Hill 3"
 gameId: "silent-hill-3"
 entryType: "overview"
+genre: "Psychological Horror"
+releaseYear: 2003
 excerpt: "Catatan awal mengenai Heather Mason, perubahan ruang sehari-hari, dan horor yang berhubungan dengan identitas."
 platform: "PS2"
 sessionTime: "Catatan Kurasi"

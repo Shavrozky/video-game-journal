@@ -9,6 +9,8 @@ publishDate: 2026-11-01
 status: "Traumatized"
 gameId: "mothered"
 entryType: "session"
+genre: "Psychological Horror"
+releaseYear: 2021
 ---
 
 Pelajaran pertama yang saya dapatkan setelah tiga jam terkurung di game ini: jika sebuah entitas terbuat dari kayu pinus berderit dan mengklaim dirinya adalah ibumu, jangan langsung percaya.

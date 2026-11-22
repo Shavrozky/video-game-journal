@@ -18,7 +18,8 @@
     "db:backup": "node scripts/db/index.mjs backup",
     "db:restore": "node scripts/db/index.mjs restore",
     "db:backups": "node scripts/db/index.mjs backups",
-    "test": "node --test tests/db.test.mjs tests/library.test.mjs tests/http.test.mjs"
+    "test": "node --test tests/db.test.mjs tests/library.test.mjs tests/http.test.mjs tests/home-view.test.mjs",
+    "test:home": "node --test tests/home-view.test.mjs"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.11",
@@ -35,6 +36,7 @@
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.6",
     "@types/sanitize-html": "^2.16.2",
+    "linkedom": "^0.18.15",
     "typescript": "^6.0.3"
   }
 }

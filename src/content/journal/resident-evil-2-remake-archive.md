@@ -3,6 +3,8 @@ title: "Resident Evil 2 Remake — Ketakutan yang Dibangun oleh Ruang"
 game: "Resident Evil 2 Remake"
 gameId: "resident-evil-2-remake"
 entryType: "overview"
+genre: "Survival Horror"
+releaseYear: 2019
 excerpt: "Mempelajari bagaimana keterbatasan sumber daya, jalur eksplorasi, dan ancaman menciptakan ketegangan survival horror."
 platform: "PS4"
 sessionTime: "Catatan Kurasi"

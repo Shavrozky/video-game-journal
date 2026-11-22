@@ -1,0 +1,186 @@
+---
+import NotebookLayout from '../layouts/NotebookLayout.astro';
+import ArchiveCover from '../components/ArchiveCover.astro';
+import JournalIcon from '../components/ui/JournalIcon.astro';
+
+import { gotyArchive } from '../data/goty';
+---
+
+<NotebookLayout
+  activeTab="goty"
+  headTitle="Game of the Year — Personal Archive"
+  kicker="Personal Archive"
+  kickerSuffix="Vol. 01 / Hall of Fame"
+  title="GAME OF THE YEAR"
+  subtitle="Catatan tahunan untuk permainan yang paling membekas, mendefinisikan waktu, dan layak dikenang."
+  footerLabel="Personal Archive // GOTY"
+  pageLabel="GOTY / 004"
+  sideIndexLabel="GOTY // ARCHIVE"
+>
+  <main class="mx-auto w-full max-w-5xl pb-6">
+
+    <!-- HERO HEADER -->
+    <header class="pb-8 pt-1 sm:pb-9 md:pt-3">
+      <p
+        class="mb-3 flex items-center gap-3 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#8e3029]"
+      >
+        <span class="h-px w-7 bg-[#8e3029]"></span>
+        Annual Curated Selection
+      </p>
+
+      <h1
+        class="max-w-3xl font-serif text-[clamp(2.25rem,4.8vw,3.75rem)] font-bold leading-[1.08] tracking-tight text-[#302820]"
+      >
+        The games that
+        <span class="font-normal italic text-[#8e3029]">
+          defined each year.
+        </span>
+      </h1>
+
+      <p
+        class="mt-4 max-w-2xl font-serif text-base leading-relaxed text-[#706457] md:text-lg"
+      >
+        Bukan tentang skor ulasan atau konsensus industri—melainkan daftar personal
+        mengenai dunia mana yang paling hidup di kepala sepanjang tahun berjalan.
+      </p>
+    </header>
+
+    <!-- YEARLY GOTY LIST -->
+    <div class="space-y-10">
+      {
+        gotyArchive.map((entry, index) => (
+          <section
+            aria-labelledby={`goty-year-${entry.year}`}
+            class="border-t border-[#cfc5b4] pt-8 md:pt-10"
+          >
+            <!-- SECTION HEADER PER TAHUN -->
+            <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p
+                  class="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#8e3029]"
+                >
+                  {String(index + 1).padStart(2, '0')} / Annual Selection
+                </p>
+
+                <h2
+                  id={`goty-year-${entry.year}`}
+                  class="font-serif text-3xl font-bold text-[#302820] md:text-4xl"
+                >
+                  {entry.year}
+                </h2>
+              </div>
+
+              <span
+                class="border border-[#d2c5b3] bg-[#f4ede0] px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#8e3029]"
+              >
+                ★ Game of the Year
+              </span>
+            </div>
+
+            <!-- KARTU PEMENANG UTAMA -->
+            <article
+              class="grid overflow-hidden border border-[#d2c5b3] bg-[#f4ede0] sm:grid-cols-[205px_minmax(0,1fr)]"
+            >
+              <!-- COVER ARTWORK -->
+              <div
+                class="flex items-center justify-center border-b border-[#d2c5b3] bg-[#e9dfcf] px-6 py-7 sm:border-b-0 sm:border-r"
+              >
+                <ArchiveCover
+                  title={entry.winner.title}
+                  cover={entry.winner.cover}
+                  platform={entry.winner.platform}
+                  class="w-full max-w-[165px] -rotate-2 border-[5px] border-white shadow-lg transition-transform duration-200 hover:rotate-0"
+                />
+              </div>
+
+              <!-- DETAIL & CATATAN REFLEKSI -->
+              <div class="flex min-w-0 flex-col justify-center p-6 sm:p-7 md:p-8">
+                <p
+                  class="font-mono text-[10px] font-bold uppercase tracking-[0.13em] text-[#8e3029]"
+                >
+                  {entry.winner.developer}
+                  <span class="mx-2 text-[#b5a796]">/</span>
+                  {entry.winner.platform}
+                </p>
+
+                <h3
+                  class="mt-2 font-serif text-[clamp(1.65rem,3vw,2.25rem)] font-bold leading-[1.15] text-[#302820]"
+                >
+                  {entry.winner.title}
+                </h3>
+
+                <blockquote
+                  class="mt-3 border-l-2 border-[#8e3029] pl-3.5 font-serif text-base italic text-[#4a3f35]"
+                >
+                  “{entry.winner.quote}”
+                </blockquote>
+
+                <p
+                  class="mt-4 max-w-2xl font-serif text-sm leading-relaxed text-[#6f6356] md:text-base"
+                >
+                  {entry.winner.reflection}
+                </p>
+
+                {entry.winner.journalHref && (
+                  <a
+                    href={entry.winner.journalHref}
+                    class="mt-6 inline-flex items-center gap-2 self-start border-b border-[#8e3029] pb-1 font-mono text-[10px] font-bold uppercase tracking-[0.13em] text-[#8e3029] transition-opacity hover:opacity-80"
+                  >
+                    Read Related Journal
+                    <JournalIcon name="arrow" size={13} />
+                  </a>
+                )}
+              </div>
+            </article>
+
+            <!-- HONORABLE MENTIONS / FINALIS -->
+            {entry.honorableMentions.length > 0 && (
+              <div class="mt-3 border border-[#d2c5b3] bg-[#f8f4ec] p-5">
+                <p
+                  class="mb-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#897b69]"
+                >
+                  Honorable Mentions &amp; Special Citations — {entry.year}
+                </p>
+
+                <ul class="grid gap-2.5 sm:grid-cols-3">
+                  {entry.honorableMentions.map((runner) => (
+                    <li
+                      class="flex flex-col justify-between border border-[#e0d6c6] bg-[#f4ede0]/70 p-3.5"
+                    >
+                      <div>
+                        {runner.category && (
+                          <span
+                            class="block font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-[#8e3029]"
+                          >
+                            {runner.category}
+                          </span>
+                        )}
+                        <span class="mt-1 block font-serif text-base font-bold text-[#302820]">
+                          {runner.title}
+                        </span>
+                      </div>
+
+                      <span class="mt-2 block font-mono text-[10px] text-[#72675a]">
+                        {runner.platform}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+        ))
+      }
+    </div>
+
+    <!-- CLOSING -->
+    <footer
+      class="mt-10 border-t border-dashed border-[#cfc5b4] pt-5 text-center"
+    >
+      <p class="font-serif text-sm italic text-[#807363]">
+        A personal canon of unforgettable worlds, updated every December.
+      </p>
+    </footer>
+
+  </main>
+</NotebookLayout>

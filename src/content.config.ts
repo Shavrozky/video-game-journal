@@ -39,6 +39,14 @@ const journalCollection = defineCollection({
       "Planned",
     ]),
 
+    // --- Optional fields used by the home page "Database View" table. ---
+    // All are optional: existing entries keep working untouched, and the table
+    // shows an em dash rather than inventing a value.
+    score: z.number().min(0).max(10).optional(),
+    genre: z.string().optional(),
+    releaseYear: z.number().int().min(1950).max(2100).optional(),
+    owned: z.boolean().optional(),
+
     paranoia: z
       .array(
         z.object({

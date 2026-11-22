@@ -564,16 +564,10 @@ var BACKLOG_STATUSES = [
 ];
 var PUBLICATION_STATUSES = ["draft", "published"];
 // src/lib/server/library-repository.ts
-/**
-* Personal library repository.
-*
-* All SQL for personal games lives here. API routes and pages call these
-* functions; no component contains hand-written SQL.
-*/
 var library_repository_exports = /* @__PURE__ */ __exportAll({
-	ALL_PLATFORMS: () => ALL_PLATFORMS,
-	ALL_PRIORITIES: () => ALL_PRIORITIES,
-	ALL_STATUSES: () => ALL_STATUSES,
+	ALL_PLATFORMS: () => PLATFORMS,
+	ALL_PRIORITIES: () => PRIORITIES,
+	ALL_STATUSES: () => GAME_STATUSES,
 	ConflictError: () => ConflictError,
 	DuplicateError: () => DuplicateError,
 	NotFoundError: () => NotFoundError,
@@ -717,8 +711,8 @@ function listGames(options = {}) {
 	const where = [];
 	const params = {};
 	if (options.search) {
-		where.push(`LOWER(title) LIKE @search ESCAPE '\\'`);
-		params.search = `%${options.search.toLowerCase().replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+		where.push(String.raw`LOWER(title) LIKE @search ESCAPE '\'`);
+		params.search = `%${options.search.toLowerCase().replace(/[\\%_]/g, (m) => String.raw`\$&`)}%`;
 	}
 	if (options.platform) {
 		where.push("platform = @platform");
@@ -864,91 +858,118 @@ var UPDATABLE_KEYS = /* @__PURE__ */ new Set([
 	"genre",
 	"coverUrl"
 ]);
+var PERSONAL_UPDATERS = {
+	status: (val) => {
+		if (!GAME_STATUSES.includes(val)) throw new ValidationError("status", "Status tidak dikenal.");
+		return {
+			column: "status",
+			paramName: "status",
+			paramValue: val
+		};
+	},
+	platform: (val) => {
+		const platform = typeof val === "string" ? val.trim() : "";
+		if (!platform) throw new ValidationError("platform", "Platform wajib diisi.");
+		if (platform.length > 40) throw new ValidationError("platform", "Platform terlalu panjang.");
+		return {
+			column: "platform",
+			paramName: "platform",
+			paramValue: platform
+		};
+	},
+	priority: (val) => {
+		if (!PRIORITIES.includes(val)) throw new ValidationError("priority", "Prioritas tidak dikenal.");
+		return {
+			column: "priority",
+			paramName: "priority",
+			paramValue: val
+		};
+	},
+	hoursPlayed: (val) => ({
+		column: "hours_played",
+		paramName: "hours_played",
+		paramValue: optionalNumber(val, "hoursPlayed", 0, 1e5)
+	}),
+	progressPercent: (val) => ({
+		column: "progress_percent",
+		paramName: "progress_percent",
+		paramValue: optionalNumber(val, "progressPercent", 0, 100, { integer: true })
+	}),
+	personalRating: (val) => ({
+		column: "personal_rating",
+		paramName: "personal_rating",
+		paramValue: optionalNumber(val, "personalRating", 1, 10, { integer: true })
+	}),
+	notes: (val) => ({
+		column: "notes",
+		paramName: "notes",
+		paramValue: optionalText(val, "notes")
+	}),
+	startedAt: (val) => ({
+		column: "started_at",
+		paramName: "started_at",
+		paramValue: optionalDate$1(val, "startedAt")
+	}),
+	completedAt: (val) => ({
+		column: "completed_at",
+		paramName: "completed_at",
+		paramValue: optionalDate$1(val, "completedAt")
+	})
+};
+var IDENTITY_UPDATERS = {
+	title: (val) => ({
+		column: "title",
+		paramName: "title",
+		paramValue: requireTitle$1(val)
+	}),
+	franchise: (val) => ({
+		column: "franchise",
+		paramName: "franchise",
+		paramValue: optionalText(val, "franchise", 120)
+	}),
+	releaseYear: (val) => ({
+		column: "release_year",
+		paramName: "release_year",
+		paramValue: optionalNumber(val, "releaseYear", 1950, 2100, { integer: true })
+	}),
+	genre: (val) => ({
+		column: "genre",
+		paramName: "genre",
+		paramValue: optionalText(val, "genre", 120)
+	}),
+	coverUrl: (val) => ({
+		column: "cover_url",
+		paramName: "cover_url",
+		paramValue: optionalHttpUrl(val)
+	})
+};
+function extractProvidedEntries(input) {
+	const entries = Object.entries(input).filter(([, value]) => value !== void 0);
+	const unknown = entries.find(([key]) => !UPDATABLE_KEYS.has(key));
+	if (unknown) throw new ValidationError(unknown[0], `Field "${unknown[0]}" tidak dapat diubah.`);
+	return entries;
+}
 function updateGame(id, input) {
 	const db = getDb();
 	const existing = getGameById(id);
 	if (!existing) throw new NotFoundError("Game tidak ditemukan.");
+	const entries = extractProvidedEntries(input);
+	if (entries.some(([key]) => Object.hasOwn(IDENTITY_UPDATERS, key)) && existing.source === "steam") throw new ValidationError("title", "Game dari Steam mengikuti data katalog. Hanya field personal yang dapat diubah.");
+	const allUpdaters = {
+		...PERSONAL_UPDATERS,
+		...IDENTITY_UPDATERS
+	};
 	const fields = [];
 	const params = {
 		id,
 		updated_at: nextUpdatedAt(existing.updatedAt)
 	};
-	const provided = {};
-	for (const [key, value] of Object.entries(input)) if (value !== void 0) provided[key] = value;
-	const has = (key) => Object.prototype.hasOwnProperty.call(provided, key);
-	const read = (key) => provided[key];
-	const unknownKey = Object.keys(provided).find((key) => !UPDATABLE_KEYS.has(key));
-	if (unknownKey) throw new ValidationError(unknownKey, `Field "${unknownKey}" tidak dapat diubah.`);
-	if (has("status")) {
-		if (!GAME_STATUSES.includes(read("status"))) throw new ValidationError("status", "Status tidak dikenal.");
-		fields.push("status = @status");
-		params.status = read("status");
-	}
-	if (has("platform")) {
-		const rawPlatform = read("platform");
-		const platform = typeof rawPlatform === "string" ? rawPlatform.trim() : "";
-		if (!platform) throw new ValidationError("platform", "Platform wajib diisi.");
-		if (platform.length > 40) throw new ValidationError("platform", "Platform terlalu panjang.");
-		fields.push("platform = @platform");
-		params.platform = platform;
-	}
-	if (has("priority")) {
-		if (!PRIORITIES.includes(read("priority"))) throw new ValidationError("priority", "Prioritas tidak dikenal.");
-		fields.push("priority = @priority");
-		params.priority = read("priority");
-	}
-	if (has("hoursPlayed")) {
-		fields.push("hours_played = @hours_played");
-		params.hours_played = optionalNumber(read("hoursPlayed"), "hoursPlayed", 0, 1e5);
-	}
-	if (has("progressPercent")) {
-		fields.push("progress_percent = @progress_percent");
-		params.progress_percent = optionalNumber(read("progressPercent"), "progressPercent", 0, 100, { integer: true });
-	}
-	if (has("personalRating")) {
-		fields.push("personal_rating = @personal_rating");
-		params.personal_rating = optionalNumber(read("personalRating"), "personalRating", 1, 10, { integer: true });
-	}
-	if (has("notes")) {
-		fields.push("notes = @notes");
-		params.notes = optionalText(read("notes"), "notes");
-	}
-	if (has("startedAt")) {
-		fields.push("started_at = @started_at");
-		params.started_at = optionalDate$1(read("startedAt"), "startedAt");
-	}
-	if (has("completedAt")) {
-		fields.push("completed_at = @completed_at");
-		params.completed_at = optionalDate$1(read("completedAt"), "completedAt");
-	}
-	if ([
-		"title",
-		"franchise",
-		"releaseYear",
-		"genre",
-		"coverUrl"
-	].some((key) => has(key))) {
-		if (existing.source === "steam") throw new ValidationError("title", "Game dari Steam mengikuti data katalog. Hanya field personal yang dapat diubah.");
-		if (has("title")) {
-			fields.push("title = @title");
-			params.title = requireTitle$1(read("title"));
-		}
-		if (has("franchise")) {
-			fields.push("franchise = @franchise");
-			params.franchise = optionalText(read("franchise"), "franchise", 120);
-		}
-		if (has("releaseYear")) {
-			fields.push("release_year = @release_year");
-			params.release_year = optionalNumber(read("releaseYear"), "releaseYear", 1950, 2100, { integer: true });
-		}
-		if (has("genre")) {
-			fields.push("genre = @genre");
-			params.genre = optionalText(read("genre"), "genre", 120);
-		}
-		if (has("coverUrl")) {
-			fields.push("cover_url = @cover_url");
-			params.cover_url = optionalHttpUrl(read("coverUrl"));
-		}
+	for (const [key, value] of entries) {
+		const updater = allUpdaters[key];
+		if (!updater) continue;
+		const { column, paramName, paramValue } = updater(value);
+		fields.push(`${column} = @${paramName}`);
+		params[paramName] = paramValue;
 	}
 	if (fields.length === 0) return existing;
 	fields.push("updated_at = @updated_at");
@@ -957,13 +978,6 @@ function updateGame(id, input) {
 	if (!updated) throw new NotFoundError("Game tidak ditemukan setelah pembaruan.");
 	return updated;
 }
-/**
-* Removes a personal game.
-*
-* Safe policy: a game that still has field logs is NOT deleted. The caller gets
-* a ConflictError listing the logs, and must either delete them explicitly or
-* keep the game. This guarantees journal content is never lost implicitly.
-*/
 function removeGame(id) {
 	return transaction((db) => {
 		const game = getGameById(id);
@@ -996,9 +1010,6 @@ function countGames() {
 function reseedLegacy(options = {}) {
 	return seedLegacyBacklog(options);
 }
-var ALL_STATUSES = GAME_STATUSES;
-var ALL_PRIORITIES = PRIORITIES;
-var ALL_PLATFORMS = PLATFORMS;
 // src/lib/server/field-log-repository.ts
 /**
 * Field log repository — database-backed session logs.

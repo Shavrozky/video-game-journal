@@ -1,38 +1,70 @@
-
 ---
-import { getCollection } from 'astro:content';
+import { getCollection, getEntry } from 'astro:content';
 
 import NotebookLayout from '../layouts/NotebookLayout.astro';
 import ArchiveCover from '../components/ArchiveCover.astro';
 import JournalIcon from '../components/ui/JournalIcon.astro';
+import HomeDatabaseView from '../components/HomeDatabaseView.astro';
 
 import {
-  gameForEntry,
   journalPath,
   sortJournals,
 } from '../lib/journal';
+
+import { existsSync } from 'node:fs';
+
+import {
+  combineRows,
+  rowsFromJournals,
+  rowsFromLibrary,
+  type DatabaseRow,
+} from '../lib/home-database';
+
+import { DATABASE_PATH } from '../lib/server/db';
+import { ensureDatabase } from '../lib/server/http';
+import { listGames } from '../lib/server/library-repository';
 
 const allLogs = sortJournals(
   await getCollection('journal')
 );
 
+const rdr2Entry = await getEntry('journal', 'rdr2-log-01');
+
 const featuredLog =
+  rdr2Entry ??
+  allLogs.find(
+    (entry) => entry.id === 'rdr2-log-01' || entry.data.gameId === 'rdr2'
+  ) ??
   allLogs.find(
     (entry) => entry.data.entryType === 'session'
   ) ??
   allLogs[0] ??
   null;
 
-const featuredGame = featuredLog
-  ? gameForEntry(featuredLog)
-  : null;
-
-const featuredCover = '/images.jpg';
+const featuredCover = featuredLog?.data.boxArtUrl ?? '/rdr2.jpg';
 
 const featuredExcerpt = featuredLog
   ? featuredLog.data.excerpt ??
     `Sebuah catatan tentang ${featuredLog.data.game} dan pengalaman yang tertinggal setelah bermain.`
   : '';
+
+/**
+ * Library rows, or none when the SQLite file has not been created yet (fresh
+ * clone before `npm run db:seed`). The try/catch keeps a broken native binding
+ * from taking down the homepage — journal-only is a valid degraded state.
+ */
+function readLibraryRows(): DatabaseRow[] {
+  if (!existsSync(DATABASE_PATH)) return [];
+
+  try {
+    ensureDatabase();
+    return rowsFromLibrary(listGames({ order: 'title' }));
+  } catch {
+    return [];
+  }
+}
+
+const databaseRows = combineRows(rowsFromJournals(allLogs), readLibraryRows());
 ---
 
 <NotebookLayout
@@ -46,6 +78,27 @@ const featuredExcerpt = featuredLog
   pageLabel="Home / 001"
   sideIndexLabel="JOURNAL // 01"
 >
+  <!-- VIEW SWITCHER -->
+  <div class="mx-auto mb-5 flex w-full max-w-5xl flex-wrap items-center justify-between gap-3">
+    <p class="font-mono text-[9px] uppercase tracking-[0.16em] text-[#897b69]">
+      Reading Mode
+    </p>
+
+    <div class="view-switcher" role="group" aria-label="Choose view mode">
+      <button type="button" class="view-switcher__button" data-view-mode="notebook" aria-pressed="true">
+        <JournalIcon name="logs" size={12} />
+        Notebook View
+      </button>
+
+      <button type="button" class="view-switcher__button" data-view-mode="database" aria-pressed="false">
+        <JournalIcon name="catalog" size={12} />
+        Database View
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= MODE 1: EDITORIAL NOTEBOOK VIEW ================= -->
+  <div data-view-panel="notebook" class="view-panel">
   <main class="mx-auto w-full max-w-5xl pb-6">
 
     <!-- HERO -->
@@ -204,7 +257,7 @@ const featuredExcerpt = featuredLog
 
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2">
+      <div class="grid gap-3 sm:grid-cols-3">
 
         <!-- MY BACKLOG -->
         <a
@@ -278,6 +331,42 @@ const featuredExcerpt = featuredLog
 
         </a>
 
+        <!-- GOTY ARCHIVE -->
+        <a
+          href="/goty"
+          class="group flex items-center gap-4 border border-[#d2c5b3] bg-[#f5efe4] p-5 transition-colors hover:border-[#8e3029] hover:bg-[#eee4d5]"
+        >
+
+          <span
+            class="flex h-11 w-11 shrink-0 items-center justify-center border border-[#d0c0ac] font-serif text-lg font-bold text-[#8e3029]"
+          >
+            ★
+          </span>
+
+          <span class="min-w-0 flex-1">
+
+            <span
+              class="block font-serif text-xl font-bold text-[#302820]"
+            >
+              GOTY List
+            </span>
+
+            <span
+              class="mt-1 block font-serif text-sm text-[#72675a]"
+            >
+              Pilihan terbaik tiap tahun
+            </span>
+
+          </span>
+
+          <JournalIcon
+            name="arrow"
+            size={15}
+            class="shrink-0 text-[#8e3029] transition-transform group-hover:translate-x-1"
+          />
+
+        </a>
+
       </div>
 
     </section>
@@ -292,4 +381,68 @@ const featuredExcerpt = featuredLog
     </footer>
 
   </main>
+  </div>
+
+  <!-- ================= MODE 2: NOTION DATABASE VIEW ================= -->
+  <div data-view-panel="database" class="view-panel" hidden>
+    <div class="mx-auto w-full max-w-6xl pb-6">
+      <HomeDatabaseView rows={databaseRows} />
+    </div>
+  </div>
 </NotebookLayout>
+
+<script>
+  /**
+   * View mode switcher.
+   *
+   * Persists the choice in localStorage (`home-view-mode`) and applies it before
+   * first paint via an inline script in the <head> of the layout, so a returning
+   * visitor never sees the notebook view flash before the database view.
+   */
+  const STORAGE_KEY = 'home-view-mode';
+
+  type Mode = 'notebook' | 'database';
+
+  function applyMode(mode: Mode) {
+    for (const panel of document.querySelectorAll<HTMLElement>('[data-view-panel]')) {
+      panel.toggleAttribute('hidden', panel.dataset.viewPanel !== mode);
+    }
+
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-view-mode]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.viewMode === mode));
+    }
+  }
+
+  function initialise() {
+    const switcher = document.querySelector<HTMLElement>('.view-switcher');
+    if (!switcher || switcher.dataset.wired === 'true') return;
+    switcher.dataset.wired = 'true';
+
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-view-mode]')) {
+      button.addEventListener('click', () => {
+        const mode = (button.dataset.viewMode ?? 'notebook') as Mode;
+
+        applyMode(mode);
+
+        try {
+          localStorage.setItem(STORAGE_KEY, mode);
+        } catch {
+          // Private mode / storage disabled: the view still switches this session.
+        }
+      });
+    }
+
+    // Re-apply after ClientRouter swaps the DOM.
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(STORAGE_KEY);
+    } catch {
+      stored = null;
+    }
+
+    applyMode(stored === 'database' ? 'database' : 'notebook');
+  }
+
+  document.addEventListener('astro:page-load', initialise);
+  initialise();
+</script>

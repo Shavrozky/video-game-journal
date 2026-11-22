@@ -3,6 +3,8 @@ title: "Silent Hill 2 — Kota yang Memantulkan Rasa Bersalah"
 game: "Silent Hill 2 (2001)"
 gameId: "silent-hill-2"
 entryType: "overview"
+genre: "Psychological Horror"
+releaseYear: 2001
 excerpt: "Sebuah pengantar tentang bagaimana kabut, kehilangan, dan ruang yang asing membentuk horor psikologis dalam Silent Hill 2."
 platform: "PS2"
 sessionTime: "Catatan Kurasi"

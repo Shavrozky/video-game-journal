@@ -3,6 +3,8 @@ title: "Resident Evil 7 — Rumah yang Menolak Menjadi Tempat Aman"
 game: "Resident Evil 7: Biohazard"
 gameId: "resident-evil-7"
 entryType: "overview"
+genre: "Survival Horror"
+releaseYear: 2017
 excerpt: "Catatan mengenai perspektif orang pertama, lingkungan rumah yang mengancam, dan hubungan antara jarak pandang dengan rasa takut."
 platform: "PC"
 sessionTime: "Catatan Kurasi"

@@ -1,0 +1,484 @@
+---
+/**
+ * "Database View" — a Notion-style table over the same real data.
+ *
+ * Every row comes from `buildDatabaseRows()` (journal entries + personal library).
+ * Rows are rendered on the server and rebuilt client-side from an embedded JSON
+ * payload, so sorting/searching needs no extra network round-trip.
+ *
+ * Fields the project genuinely does not record (score, owned) are rendered as a
+ * neutral placeholder rather than a fabricated value.
+ */
+
+import type { DatabaseRow } from '../lib/home-database';
+
+interface Props {
+  rows: DatabaseRow[];
+}
+
+const { rows } = Astro.props;
+
+const statusBuckets = ['All', 'Completed', 'Playing', 'Backlog'] as const;
+
+const scoreClass = (score: number) =>
+  score >= 10 ? 'db-pill--score-10' : score >= 9 ? 'db-pill--score-9' : 'db-pill--score-low';
+
+const bucketClass = (bucket: string) =>
+  bucket === 'Completed'
+    ? 'db-pill--completed'
+    : bucket === 'Playing'
+      ? 'db-pill--playing'
+      : bucket === 'Backlog'
+        ? 'db-pill--backlog'
+        : 'db-pill--other';
+
+// Serialised for the client so it can re-sort/re-filter without a request.
+// `<` is escaped to keep the payload inert inside a <script> block.
+const payload = JSON.stringify(rows).replace(/</g, '\\u003c');
+---
+
+<section
+  data-database-view
+  data-rows={payload}
+  class="space-y-4"
+  aria-labelledby="db-heading"
+>
+  <!-- BANNER -->
+  <div class="db-banner" data-banner>
+    <div class="db-banner__inner">
+      <span class="db-medal" aria-hidden="true">★</span>
+
+      <div class="db-banner__text">
+        <h2 id="db-heading" class="db-banner__title">Game Reviews and Journal</h2>
+        <p class="db-banner__subtitle">
+          A living index of every world written down — scores, genres, platforms,
+          and the years they were lived in. Sort it, search it, or read the note.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="db-banner__collapse"
+        data-banner-toggle
+        aria-expanded="true"
+        aria-controls="db-heading"
+      >
+        Collapse
+      </button>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="db-tabs" role="tablist" aria-label="Sort order">
+    <button type="button" class="db-tab" role="tab" data-sort="favorite" aria-selected="true">
+      Favorite Order
+    </button>
+    <button type="button" class="db-tab" role="tab" data-sort="score" aria-selected="false" tabindex="-1">
+      Highest Score
+    </button>
+    <button type="button" class="db-tab" role="tab" data-sort="alpha" aria-selected="false" tabindex="-1">
+      Alphabetical
+    </button>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <label class="sr-only" for="db-search">Search games</label>
+    <input
+      id="db-search"
+      type="search"
+      class="db-search sm:max-w-xs"
+      placeholder="Search title, genre, or platform…"
+      autocomplete="off"
+      data-db-search
+    />
+
+    <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by status">
+      {
+        statusBuckets.map((bucket) => (
+          <button
+            type="button"
+            class="db-chip"
+            data-status={bucket}
+            aria-pressed={bucket === 'All' ? 'true' : 'false'}
+          >
+            {bucket}
+          </button>
+        ))
+      }
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="border border-[#cfc3ae] bg-[#fdfbf6]">
+    <div class="overflow-x-auto">
+      <table class="db-table">
+        <caption class="sr-only">
+          Combined journal and personal library records
+        </caption>
+
+        <thead>
+          <tr>
+            <th scope="col" style="width:2.75rem;">Cover</th>
+            <th scope="col">Name &amp; Notes</th>
+            <th scope="col">Score</th>
+            <th scope="col">Genre</th>
+            <th scope="col">Platform</th>
+            <th scope="col">Released</th>
+            <th scope="col">Last Played</th>
+            <th scope="col">Status</th>
+            <th scope="col" style="width:4.5rem;">Owned</th>
+          </tr>
+        </thead>
+
+        <tbody data-db-body>
+          {
+            rows.map((row) => (
+              <tr data-row-key={row.key}>
+                <td>
+                  {row.coverUrl ? (
+                    <img
+                      src={row.coverUrl}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      referrerpolicy="no-referrer"
+                      class="db-thumb"
+                      data-thumb
+                    />
+                  ) : (
+                    <span class="db-thumb db-thumb--empty" aria-hidden="true">
+                      {row.title.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                </td>
+
+                <td>
+                  <a href={row.href} class="db-name">{row.title}</a>
+                  {row.noteTitle && <span class="db-name-sub">{row.noteTitle}</span>}
+                </td>
+
+                <td>
+                  {row.score !== null ? (
+                    <span class:list={['db-pill', scoreClass(row.score)]}>{row.score}</span>
+                  ) : (
+                    <span class="db-muted" title="No score recorded">—</span>
+                  )}
+                </td>
+
+                <td>
+                  {row.genres.length > 0 ? (
+                    <span class="flex flex-wrap gap-1">
+                      {row.genres.map((genre) => (
+                        <span class="db-pill db-pill--genre">{genre}</span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span class="db-muted" title="No genre recorded">—</span>
+                  )}
+                </td>
+
+                <td>
+                  <span class="db-pill db-pill--platform">{row.platform}</span>
+                </td>
+
+                <td class="db-muted">{row.releaseYear ?? '—'}</td>
+                <td class="db-muted">{row.lastPlayedYear ?? '—'}</td>
+
+                <td>
+                  <span class:list={['db-pill', bucketClass(row.statusBucket)]} title={row.statusLabel}>
+                    {row.statusBucket}
+                  </span>
+                </td>
+
+                <td>
+                  {row.owned === true ? (
+                    <span class="db-owned db-owned--on" title="Marked as owned">✓</span>
+                  ) : row.owned === false ? (
+                    <span class="db-owned" title="Not owned"> </span>
+                  ) : (
+                    <span
+                      class="db-owned db-owned--unknown"
+                      title="Ownership not recorded for this entry"
+                    >
+                      —
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="db-empty" data-db-empty hidden>
+      <p class="font-serif text-base">No records match this search.</p>
+      <button type="button" class="db-chip mt-3" data-db-reset>Reset filters</button>
+    </div>
+
+    <div class="db-footer">
+      <span data-db-count>COUNT {rows.length}</span>
+      <span data-db-visible hidden></span>
+    </div>
+  </div>
+</section>
+
+<script>
+  /**
+   * Database View behaviour.
+   *
+   * Rows are rebuilt from the embedded payload rather than hidden/shown, so the
+   * sort order and the count stay truthful after filtering. Everything is bound
+   * to the freshly rendered root and guarded, so ClientRouter navigation cannot
+   * stack duplicate listeners.
+   */
+
+  interface Row {
+    key: string;
+    title: string;
+    noteTitle: string | null;
+    href: string;
+    coverUrl: string | null;
+    platform: string;
+    score: number | null;
+    genres: string[];
+    releaseYear: number | null;
+    lastPlayedYear: number | null;
+    statusLabel: string;
+    statusBucket: 'Completed' | 'Playing' | 'Backlog' | 'Other';
+    owned: boolean | null;
+    favoriteRank: number;
+  }
+
+  type SortMode = 'favorite' | 'score' | 'alpha';
+
+  const HTML_ESCAPES: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+
+  function esc(value: string): string {
+    return value.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
+  }
+
+  function scoreClass(score: number): string {
+    return score >= 10 ? 'db-pill--score-10' : score >= 9 ? 'db-pill--score-9' : 'db-pill--score-low';
+  }
+
+  function bucketClass(bucket: string): string {
+    return bucket === 'Completed'
+      ? 'db-pill--completed'
+      : bucket === 'Playing'
+        ? 'db-pill--playing'
+        : bucket === 'Backlog'
+          ? 'db-pill--backlog'
+          : 'db-pill--other';
+  }
+
+  function rowMarkup(row: Row): string {
+    const cover = row.coverUrl
+      ? `<img src="${esc(row.coverUrl)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" class="db-thumb" data-thumb>`
+      : `<span class="db-thumb db-thumb--empty" aria-hidden="true">${esc(row.title.slice(0, 1).toUpperCase())}</span>`;
+
+    const note = row.noteTitle ? `<span class="db-name-sub">${esc(row.noteTitle)}</span>` : '';
+
+    const score =
+      row.score !== null
+        ? `<span class="db-pill ${scoreClass(row.score)}">${row.score}</span>`
+        : '<span class="db-muted" title="No score recorded">—</span>';
+
+    const genres =
+      row.genres.length > 0
+        ? `<span class="flex flex-wrap gap-1">${row.genres
+            .map((genre) => `<span class="db-pill db-pill--genre">${esc(genre)}</span>`)
+            .join('')}</span>`
+        : '<span class="db-muted" title="No genre recorded">—</span>';
+
+    const owned =
+      row.owned === true
+        ? '<span class="db-owned db-owned--on" title="Marked as owned">✓</span>'
+        : row.owned === false
+          ? '<span class="db-owned" title="Not owned"> </span>'
+          : '<span class="db-owned db-owned--unknown" title="Ownership not recorded for this entry">—</span>';
+
+    return `<tr data-row-key="${esc(row.key)}">
+      <td>${cover}</td>
+      <td><a href="${esc(row.href)}" class="db-name">${esc(row.title)}</a>${note}</td>
+      <td>${score}</td>
+      <td>${genres}</td>
+      <td><span class="db-pill db-pill--platform">${esc(row.platform)}</span></td>
+      <td class="db-muted">${row.releaseYear ?? '—'}</td>
+      <td class="db-muted">${row.lastPlayedYear ?? '—'}</td>
+      <td><span class="db-pill ${bucketClass(row.statusBucket)}" title="${esc(row.statusLabel)}">${esc(
+        row.statusBucket,
+      )}</span></td>
+      <td>${owned}</td>
+    </tr>`;
+  }
+
+  function initialiseDatabaseView() {
+    const root = document.querySelector<HTMLElement>('[data-database-view]');
+    if (!root || root.dataset.wired === 'true') return;
+    root.dataset.wired = 'true';
+
+    const bodyNode = root.querySelector<HTMLElement>('[data-db-body]');
+    if (!bodyNode) return;
+
+    // Non-null local so closures below keep the narrowing.
+    const body: HTMLElement = bodyNode;
+    const search = root.querySelector<HTMLInputElement>('[data-db-search]');
+    const count = root.querySelector<HTMLElement>('[data-db-count]');
+    const visible = root.querySelector<HTMLElement>('[data-db-visible]');
+    const empty = root.querySelector<HTMLElement>('[data-db-empty]');
+    const reset = root.querySelector<HTMLButtonElement>('[data-db-reset]');
+    const banner = root.querySelector<HTMLElement>('[data-banner]');
+    const bannerToggle = root.querySelector<HTMLButtonElement>('[data-banner-toggle]');
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>('[data-sort]')];
+    const chips = [...root.querySelectorAll<HTMLButtonElement>('[data-status]')];
+
+    if (!body) return;
+
+    let rows: Row[] = [];
+    try {
+      rows = JSON.parse(root.dataset.rows ?? '[]') as Row[];
+    } catch {
+      rows = [];
+    }
+
+    if (count) count.textContent = `COUNT ${rows.length}`;
+
+    let sortMode: SortMode = 'favorite';
+    let bucket = 'All';
+    let query = '';
+
+    /* ---------------- banner collapse ---------------- */
+    bannerToggle?.addEventListener('click', () => {
+      const collapsed = banner?.dataset.collapsed === 'true';
+      if (banner) banner.dataset.collapsed = String(!collapsed);
+      bannerToggle.setAttribute('aria-expanded', String(collapsed));
+      bannerToggle.textContent = collapsed ? 'Collapse' : 'Expand';
+    });
+
+    /* ---------------- sorting ---------------- */
+    function sortRows(list: Row[]): Row[] {
+      const copy = [...list];
+
+      if (sortMode === 'score') {
+        // Unscored rows always sink, whatever the sort.
+        return copy.sort((a, b) => {
+          if (a.score === null && b.score === null) return a.title.localeCompare(b.title);
+          if (a.score === null) return 1;
+          if (b.score === null) return -1;
+          return b.score - a.score || a.title.localeCompare(b.title);
+        });
+      }
+
+      if (sortMode === 'alpha') {
+        return copy.sort((a, b) => a.title.localeCompare(b.title));
+      }
+
+      return copy.sort(
+        (a, b) => a.favoriteRank - b.favoriteRank || a.title.localeCompare(b.title),
+      );
+    }
+
+    /* ---------------- render ---------------- */
+    function render() {
+      const needle = query.trim().toLowerCase();
+
+      const filtered = rows.filter((row) => {
+        if (bucket !== 'All' && row.statusBucket !== bucket) return false;
+        if (!needle) return true;
+
+        const haystack = [row.title, row.platform, row.statusLabel, ...row.genres]
+          .join(' ')
+          .toLowerCase();
+
+        return haystack.includes(needle);
+      });
+
+      const sorted = sortRows(filtered);
+
+      body.innerHTML = sorted.map(rowMarkup).join('');
+
+      const isEmpty = sorted.length === 0;
+      empty?.toggleAttribute('hidden', !isEmpty);
+
+      if (visible) {
+        visible.textContent = isEmpty ? '' : `SHOWING ${sorted.length}`;
+        visible.toggleAttribute('hidden', isEmpty);
+      }
+    }
+
+    /* ---------------- wiring ---------------- */
+    for (const tab of tabs) {
+      tab.addEventListener('click', () => {
+        sortMode = (tab.dataset.sort as SortMode) ?? 'favorite';
+
+        for (const other of tabs) {
+          const active = other === tab;
+          other.setAttribute('aria-selected', String(active));
+          other.tabIndex = active ? 0 : -1;
+        }
+
+        render();
+      });
+    }
+
+    // Arrow-key navigation between tabs (standard tablist behaviour).
+    const tabList = root.querySelector<HTMLElement>('[role="tablist"]');
+
+    tabList?.addEventListener('keydown', (event) => {
+      const key = (event as KeyboardEvent).key;
+      if (key !== 'ArrowRight' && key !== 'ArrowLeft') return;
+
+      const index = tabs.findIndex((tab) => tab.getAttribute('aria-selected') === 'true');
+      if (index === -1) return;
+
+      event.preventDefault();
+      const next =
+        key === 'ArrowRight' ? (index + 1) % tabs.length : (index - 1 + tabs.length) % tabs.length;
+
+      tabs[next]?.focus();
+      tabs[next]?.click();
+    });
+
+    for (const chip of chips) {
+      chip.addEventListener('click', () => {
+        bucket = chip.dataset.status ?? 'All';
+
+        for (const other of chips) {
+          other.setAttribute('aria-pressed', String(other === chip));
+        }
+
+        render();
+      });
+    }
+
+    search?.addEventListener('input', () => {
+      query = search.value;
+      render();
+    });
+
+    reset?.addEventListener('click', () => {
+      query = '';
+      bucket = 'All';
+      if (search) search.value = '';
+
+      for (const chip of chips) {
+        chip.setAttribute('aria-pressed', String(chip.dataset.status === 'All'));
+      }
+
+      render();
+    });
+
+    render();
+  }
+
+  document.addEventListener('astro:page-load', initialiseDatabaseView);
+  initialiseDatabaseView();
+</script>

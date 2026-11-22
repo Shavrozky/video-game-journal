@@ -10,7 +10,7 @@ import StatusIndicator from '../components/ui/StatusIndicator.astro';
 import JournalIcon from '../components/ui/JournalIcon.astro';
 
 interface Props {
-  activeTab?: 'logs' | 'backlog' | 'catalog' | 'favorites';
+  activeTab?: 'logs' | 'backlog' | 'catalog' | 'favorites' | 'goty';
   /** Optional overrides so non-journal pages can reuse this exact chrome. */
   title?: string;
   subtitle?: string;
@@ -53,6 +53,23 @@ const {
 
     <title>{headTitle}</title>
 
+    <!--
+      Applied before first paint so a visitor who chose the Database View never
+      sees the notebook view flash. Inline and tiny by design: an external module
+      would execute after paint.
+    -->
+    <script is:inline>
+      (function () {
+        try {
+          if (localStorage.getItem('home-view-mode') !== 'database') return;
+
+          document.documentElement.dataset.homeView = 'database';
+        } catch (e) {
+          /* storage unavailable — default notebook view */
+        }
+      })();
+    </script>
+
     <ClientRouter />
   </head>
 
@@ -62,10 +79,6 @@ const {
            bg-[#0f1113]
            text-paper-ink"
   >
-
-    <!-- ===================================== -->
-    <!-- FIXED NAVIGATION -->
-    <!-- ===================================== -->
 
     <header
       class="fixed
@@ -174,11 +187,6 @@ const {
 
       </div>
     </header>
-
-
-    <!-- ===================================== -->
-    <!-- FULL JOURNAL -->
-    <!-- ===================================== -->
 
     <div class="pt-[72px]">
 

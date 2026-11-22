@@ -30,3 +30,9 @@ pnpm-debug.log*
 
 # Personal database
 .data/personal/
+
+# Test harness output and scratch files
+.data/test-build/
+.data/test-entry/
+.data/backups/
+.data/*.html
